@@ -1,15 +1,11 @@
 #!/bin/bash
-# Craeted by Sam Gleske
+# Created by Sam Gleske
 # Sat May 16 05:58:44 EDT 2026
 # DESCRIPTION
 #   This script is intended for CI systems to be able to create and extract a
 #   cache using streams.  Use case would be a cloud object store downloading a
 #   file and streaming the download into this script.  This script then handles
-#   all extraction via stdin without writing intermediate tar files to disk.
-#
-#   During file creation intermediate files must be written to disk.  This is
-#   necessary due to tar requiring the inner tar file size in order to create
-#   the outer tar.
+#   all extraction via stdin without writing large tar files to disk.
 #
 #   Create cache strategy: Files and folders that will be added to the cache
 #   will be broken up into two tar commands.
@@ -23,10 +19,39 @@
 #     1. `sudo tar -xC /` for full path names.
 #     2. `tar -x` for relative path names.
 #
+# CREATING TARS WITHOUT THIS SCRIPT
+#
 #   If you create the outer and inner tar files without this script, then tar
 #   files should always be created with one of the following commands.
 #     tar --format ustar -c ...
 #     tar --format pax -c ...
+#
+#   Expected tar layout:
+#
+#     your-cache.tar
+#       |- agent-os-cache.tar - the sudo-created tar file.
+#       |- agent-workspace-cache.tar - working directory tar file.
+#
+# PERFORMANCE FYI
+#
+#   Compression is intentionally omitted.  If you want compression then you
+#   should process it via stdin/stdout.
+#
+#   During file creation large tar files must be written to disk.  This is
+#   necessary due to tar requiring the inner tar file size in order to create
+#   the outer tar.
+#
+#   During file extraction only a few KB of tar data is written to temporary
+#   space.  This is used for seeking and passing data from stdin of this script
+#   to stdin of multiple tar commands depending on the inner tar file name.
+#
+#   Cache creation is expected to take longer than cache extraction.
+#
+#   Some benchmarks for stdin processing:
+#     - ~10GB processed in 15s by this script.
+#     - ~200MB processed in 0.6s.
+#
+# TAR SUPPORT
 #
 #   Only ustar and pax(ustar) file formats supported.
 #   https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html
