@@ -70,7 +70,7 @@ bin_to_hex() {
 isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]
 }
-initializeFileMode() {
+determineTarFormat() {
   local typeflag format
   dd bs=512 count=1 status=none > "$TAR_HEADER"
   if isBlockZeros < "$TAR_HEADER"; then
@@ -99,7 +99,7 @@ initializeFileMode() {
   fi
 }
 readTarHeader() {
-  initializeFileMode
+  determineTarFormat
   if [ "$tar_format" = ustar ]; then
     return
   fi
