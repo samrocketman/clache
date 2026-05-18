@@ -1,6 +1,12 @@
 #!/bin/bash
 # Created by Sam Gleske
 # Sat May 16 05:58:44 EDT 2026
+# Pop!_OS 24.04 LTS
+# Linux 6.18.7-76061807-generic x86_64
+# GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)
+# dd (coreutils) 9.4
+# xxd 2023-10-25 by Juergen Weigert et al.
+# GNU Awk 5.2.1, API 3.2, PMA Avon 8-g1, (GNU MPFR 4.2.1, GNU MP 6.3.0)
 # DESCRIPTION
 #   This script is intended for CI systems to be able to create and extract a
 #   cache using streams.  Use case would be a cloud object store downloading a
@@ -155,22 +161,88 @@ readTarFile() {
   FILE_NAME="$(fileName)"
   # size to nearest 512-byte block
   FILE_SIZE="$(fileSize)"
-  # TODO: do different things depending on files encountered.
   case "$FILE_NAME" in
-     *.tar)
+    agent-os-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes"
-      echo -n 'Number of tar entries: '
-      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -t | wc -l
+      echo "sudo tar -xC / -f $FILE_NAME" >&2
+      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | sudo tar -xC /
       ;;
+    agent-workspace-cache.tar)
+      echo "$FILE_NAME is $FILE_SIZE bytes"
+      echo "tar -xf $FILE_NAME" >&2
+      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -x
+      ;;
+#    *.tar)
+#      echo "$FILE_NAME is $FILE_SIZE bytes"
+#      echo -n 'Number of tar entries: '
+#      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -t | wc -l
+#      ;;
     *)
       # skip processing
-      echo "Skipping $FILE_NAME; seeking $FILE_SIZE bytes"
+      echo "Skipping $FILE_NAME; seeking $FILE_SIZE bytes" >&2
       dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none of=/dev/null
       ;;
   esac
 }
 
-# iterate all files
-while readTarFile; do
-  true
+extract() {
+  # iterate all files
+  while readTarFile; do
+    true
+  done
+}
+
+mode="extract"
+full_paths=()
+relative_paths=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --create)
+      mode=create
+      shift
+      ;;
+    --extract)
+      mode=extract
+      shift
+      ;;
+    --)
+      break
+      ;;
+  esac
 done
+
+if [ "$mode" = extract ]; then
+  extract
+else
+  # create
+  for x in "$@"; do
+    if grep -- '^/' > /dev/null <<< "$x"
+      full_paths=+( "${x#/}" )
+    else
+      relative_paths=+( "$x" )
+    fi
+  done
+  if [ -n "${full_paths:-}" ]; then
+    (
+      cd /
+      echo tar -c "${full_paths[@]}" >&2
+      sudo tar --format pax --ignore-failed-read \
+        -cf "${TMP_DIR}/agent-os-cache.tar" -- \
+        "${full_paths[@]}"
+      cd "${TMP_DIR}"
+      tar --format pax -c agent-os-cache.tar
+      rm agent-os-cache-tar
+    )
+  fi
+  if [ -n "${relative_paths:-}" ]; then
+    (
+      echo tar -c "${relative_paths[@]}" >&2
+      tar --format pax --ignore-failed-read \
+        -cf "${TMP_DIR}/agent-workspace-cache.tar" -- \
+        "${relative_paths[@]}"
+      cd "${TMP_DIR}"
+      tar --format pax -c agent-workspace-cache.tar
+      rm agent-workspace-cache.tar
+    )
+  fi
+fi
