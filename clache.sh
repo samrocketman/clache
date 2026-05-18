@@ -216,9 +216,6 @@ full_paths=()
 relative_paths=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --)
-      break
-      ;;
     -h|--help)
       helptext
       ;;
@@ -232,9 +229,11 @@ while [ "$#" -gt 0 ]; do
       ;;
     /*)
       full_paths+=( "${1#/}" )
+      shift
       ;;
     *)
-      relative_paths+=( "$x" )
+      relative_paths+=( "$1" )
+      shift
       ;;
   esac
 done
@@ -247,20 +246,18 @@ else
     (
       cd /
       echo tar -c "${full_paths[@]}" >&2
-      sudo tar --format pax --ignore-failed-read \
-        -cf "${TMP_DIR}/agent-os-cache.tar" -- \
-        "${full_paths[@]}"
+      sudo tar --format pax --ignore-failed-read -c  -- \
+        "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
       cd "${TMP_DIR}"
       tar --format pax -c agent-os-cache.tar
-      rm agent-os-cache-tar
+      rm agent-os-cache.tar
     )
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
       echo tar -c "${relative_paths[@]}" >&2
-      tar --format pax --ignore-failed-read \
-        -cf "${TMP_DIR}/agent-workspace-cache.tar" -- \
-        "${relative_paths[@]}"
+      tar --format pax --ignore-failed-read -c -- \
+        "${relative_paths[@]}" > "${TMP_DIR}/agent-workspace-cache.tar"
       cd "${TMP_DIR}"
       tar --format pax -c agent-workspace-cache.tar
       rm agent-workspace-cache.tar
