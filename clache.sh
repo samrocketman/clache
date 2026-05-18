@@ -70,6 +70,25 @@ PAXTAR_HEADER="$TMP_DIR/outer_tar"
 TAR_HEADER="$TMP_DIR/inner_tar"
 PAX_HEADER="$TMP_DIR/pax_header"
 
+helptext() {
+cat >&2 <<EOF
+${0##*/} [--extract] < tar-to-extract.tar
+${0##*/} --create -- FILE... > tar-to-create.tar
+
+DESCRIPTION
+  Create or extract cache using tar.  Provide both relative or full path names
+  to create the cache and it will later be restored.
+
+OPTIONS
+  --create -- FILE...
+    Writes archive to stdout.  Creates a cache.  Provided on or more FILE to
+    add to the cache.  Can be relative of full paths.
+
+  --extract
+    Reads a tar file from stdin.  Extracts the cache.
+EOF
+exit 1
+}
 bin_to_hex() {
   xxd -p | tr -d '\n'
 }
@@ -77,7 +96,7 @@ isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]
 }
 determineTarFormat() {
-  local typeflag format
+  local typeflag
   dd bs=512 count=1 status=none > "$TAR_HEADER"
   if isBlockZeros < "$TAR_HEADER"; then
     if ! { dd bs=512 count=1 status=none | isBlockZeros; }; then
@@ -197,6 +216,12 @@ full_paths=()
 relative_paths=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --)
+      break
+      ;;
+    -h|--help)
+      helptext
+      ;;
     --create)
       mode=create
       shift
@@ -205,8 +230,11 @@ while [ "$#" -gt 0 ]; do
       mode=extract
       shift
       ;;
-    --)
-      break
+    /*)
+      full_paths+=( "${1#/}" )
+      ;;
+    *)
+      relative_paths+=( "$x" )
       ;;
   esac
 done
@@ -215,13 +243,6 @@ if [ "$mode" = extract ]; then
   extract
 else
   # create
-  for x in "$@"; do
-    if grep -- '^/' > /dev/null <<< "$x"
-      full_paths=+( "${x#/}" )
-    else
-      relative_paths=+( "$x" )
-    fi
-  done
   if [ -n "${full_paths:-}" ]; then
     (
       cd /
