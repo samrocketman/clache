@@ -93,6 +93,11 @@ OPTIONS
     When creating or extracting an archive the full path archive can execute
     tar without sudo.
 
+  -l DIR, --large-dir DIR
+    Customize where intermediate tar file can be written.  Sometimes the
+    intermediate tar file can be significantly larger than available /tmp file
+    space.  Default: /tmp mktemp directory.
+
   --help, -h
     Show help.
 EOF
@@ -249,6 +254,10 @@ outer_tar_prefix() (
     cat "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file"
   }
 )
+canonical_path() (
+  cd "$1"
+  echo "${PWD%/}"
+)
 #
 # MAIN
 #
@@ -259,6 +268,8 @@ mode="extract"
 full_paths=()
 relative_paths=()
 nosudo=false
+largetar_dir="${TMP_DIR}"
+export largetar_dir nosudo
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)
@@ -274,6 +285,16 @@ while [ "$#" -gt 0 ]; do
       ;;
     -n|--nosudo)
       nosudo=true
+      shift
+      ;;
+    -l|--large-dir)
+      shift
+      largetar_dir="${1:-}"
+      if [ ! -d "${largetar_dir:-}" ]; then
+        echo "ERROR: --large-dir '${largetar_dir:-}' expected to be a directory." >&2
+        exit 1
+      fi
+      largetar_dir="$(canonical_path "${largetar_dir}")"
       shift
       ;;
     /*)
@@ -298,27 +319,28 @@ else
       if [ "$nosudo" = true ]; then
         echo "tar -c ${full_paths[*]}" >&2
         tar --format pax --ignore-failed-read -c  -- \
-          "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
+          "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       else
         echo "sudo tar -c ${full_paths[*]}" >&2
         sudo tar --format pax --ignore-failed-read -c  -- \
-          "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
+          "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       fi
-      cd "${TMP_DIR}"
-      outer_tar_prefix agent-os-cache.tar > agent-os-cache-prefix
+      cd "${largetar_dir}"
       # same as `tar --format pax -c agent-os-cache.tar` except it does not
       # write the end or archive marker.
-      cat agent-os-cache-prefix agent-os-cache.tar
-      rm agent-os-cache.tar
+      outer_tar_prefix agent-os-cache.tar > "$TMP_DIR"/agent-os-cache-prefix
+      cat "$TMP_DIR"/agent-os-cache-prefix agent-os-cache.tar
+      rm -f agent-os-cache.tar
     )
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
       echo tar -c "${relative_paths[@]}" >&2
       tar --format pax --ignore-failed-read -c -- \
-        "${relative_paths[@]}" > "${TMP_DIR}/agent-workspace-cache.tar"
-      cd "${TMP_DIR}"
+        "${relative_paths[@]}" > "${largetar_dir}/agent-workspace-cache.tar"
+      cd "${largetar_dir}"
       tar --format pax -c agent-workspace-cache.tar
+      rm -f agent-workspace-cache.tar
     )
   else
     # no agent-workspace-cache.tar so we need to write out the "end of archive"
