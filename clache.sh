@@ -116,7 +116,9 @@ determineTarFormat() {
     exit 0
   fi
   tar_format="$(dd if="$TAR_HEADER" bs=1 count=6 skip=257 status=none | tr -d '\0')"
+  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none)"
   if {
+    [ "${typeflag}" = x ] ||
     dd if="$TAR_HEADER" bs=100 count=1 status=none | \
     grep -i PaxHeader > /dev/null
   }; then
@@ -124,13 +126,15 @@ determineTarFormat() {
       echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'."
       exit 1
     fi
-    typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none)"
     if [ ! "${typeflag}" = x ]; then
       echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
       exit 1
     fi
     tar_format=pax
     mv "$TAR_HEADER" "$PAXTAR_HEADER"
+  elif [ "${typeflag}" = g ]; then
+    echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
+    exit 1
   else
     tar_format=ustar
   fi
