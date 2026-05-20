@@ -86,6 +86,10 @@ OPTIONS
 
   --extract
     Reads a tar file from stdin.  Extracts the cache.
+
+  --nosudo
+    When creating or extracting an archive the full path archive can execute
+    tar without sudo.
 EOF
 exit 1
 }
@@ -107,7 +111,10 @@ determineTarFormat() {
     exit 0
   fi
   tar_format="$(dd if="$TAR_HEADER" bs=1 count=6 skip=257 status=none | tr -d '\0')"
-  if [ "$(dd if="$TAR_HEADER" bs=10 count=1 status=none)" = 'PaxHeader/' ]; then
+  if {
+    dd if="$TAR_HEADER" bs=100 count=1 status=none | \
+    grep -i PaxHeader > /dev/null
+  }; then
     if [ ! "$tar_format" = ustar ]; then
       echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'."
       exit 1
@@ -155,7 +162,7 @@ fileName() {
   echo "$name"
 }
 ustarName() {
-  dd bs=100 count=1 status=none | xargs
+  dd bs=100 count=1 status=none | tr -d '\0' | xargs
 }
 fileSize() {
   local file_size pax_size
@@ -169,7 +176,9 @@ fileSize() {
   echo "$file_size"
 }
 ustarSize() {
-  printf "%d\n" "$(dd bs=1 skip=124 count=12 status=none | xxd | awk '{print $NF}')"
+  local size
+  size="$(dd bs=1 skip=124 count=12 status=none | tr -d '\0')"
+  echo "$((8#$size))"
 }
 paxField() {
   awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER"
@@ -183,8 +192,13 @@ readTarFile() {
   case "$FILE_NAME" in
     agent-os-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes"
-      echo "sudo tar -xC / -f $FILE_NAME" >&2
-      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | sudo tar -xC /
+      if [ "$nosudo" = true ]; then
+        echo "tar -xC / -f $FILE_NAME" >&2
+        dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -xC /
+      else
+        echo "sudo tar -xC / -f $FILE_NAME" >&2
+        dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | sudo tar -xC /
+      fi
       ;;
     agent-workspace-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes"
@@ -214,6 +228,7 @@ extract() {
 mode="extract"
 full_paths=()
 relative_paths=()
+nosudo=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -h|--help)
@@ -225,6 +240,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --extract)
       mode=extract
+      shift
+      ;;
+    --nosudo)
+      nosudo=true
       shift
       ;;
     /*)
@@ -242,25 +261,30 @@ if [ "$mode" = extract ]; then
   extract
 else
   # create
+  tar_files=()
   if [ -n "${full_paths:-}" ]; then
     (
       cd /
-      echo tar -c "${full_paths[@]}" >&2
-      sudo tar --format pax --ignore-failed-read -c  -- \
-        "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
-      cd "${TMP_DIR}"
-      tar --format pax -c agent-os-cache.tar
-      rm agent-os-cache.tar
+      if [ "$nosudo" = true ]; then
+        echo "tar -c ${full_paths[*]}" >&2
+        tar --format pax --ignore-failed-read -c  -- \
+          "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
+      else
+        echo "sudo tar -c ${full_paths[*]}" >&2
+        sudo tar --format pax --ignore-failed-read -c  -- \
+          "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
+      fi
     )
+    tar_files+=( agent-os-cache.tar )
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
       echo tar -c "${relative_paths[@]}" >&2
       tar --format pax --ignore-failed-read -c -- \
         "${relative_paths[@]}" > "${TMP_DIR}/agent-workspace-cache.tar"
-      cd "${TMP_DIR}"
-      tar --format pax -c agent-workspace-cache.tar
-      rm agent-workspace-cache.tar
     )
+    tar_files+=( agent-workspace-cache.tar )
   fi
+  cd "${TMP_DIR}"
+  tar --format pax -c "${tar_files[@]}"
 fi
