@@ -238,6 +238,7 @@ outer_tar_prefix() (
   # but only outputting the header without the rest of the tar file.
   # This enables writing out a tar file to stdout in intermediate parts rather
   # than requiring double the space for creating the cache.
+  set +o pipefail
   tar --format pax -c "$1" | {
     dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header"
     header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
