@@ -1,3 +1,8 @@
+# clache v0.2 - May 20, 2026
+
+- Optimal extraction throughput by using 5MB block size instead of 512 byte
+  block size.  Ensures `dd` is not a bottleneck.
+
 # clache v0.1 - May 20, 2026
 
 - Initial release

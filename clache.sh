@@ -1,5 +1,5 @@
 #!/bin/bash
-# clache v0.1
+# clache v0.2
 # Copyright (c) 2026 Sam Gleske https://github.com/samrocketman/clache
 # MIT Licensed
 # Initially Created Sat May 16 05:58:44 EDT 2026
@@ -200,26 +200,42 @@ ustarSize() {
 paxField() {
   awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER"
 }
+dd_max_read() {
+  local FILE_SIZE max_bs count remainder
+  # To reasonably maximize throughput dd will read max_bs of data at a time.
+  # 5MB read buffer
+  max_bs=5242880
+  FILE_SIZE="$1"
+  # size to nearest 512-byte block
+  FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
+  remainder="$(( FILE_SIZE%max_bs ))"
+  dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
+  if [ "$remainder" -gt 0 ]; then
+    dd bs="$remainder" count=1 iflag=fullblock status=none
+  fi
+}
 readTarFile() {
+  local FILE_NAME FILE_SIZE
   readTarHeader
   FILE_NAME="$(fileName)"
-  # size to nearest 512-byte block
   FILE_SIZE="$(fileSize)"
   case "$FILE_NAME" in
     agent-os-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes"
-      if [ "$nosudo" = true ]; then
-        echo "tar -xC / -f $FILE_NAME" >&2
-        dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -xC /
-      else
-        echo "sudo tar -xC / -f $FILE_NAME" >&2
-        dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | sudo tar -xC /
-      fi
+      dd_max_read "$FILE_SIZE" | {
+        if [ "$nosudo" = true ]; then
+          echo "tar -xC / -f $FILE_NAME" >&2
+          tar -xC /
+        else
+          echo "sudo tar -xC / -f $FILE_NAME" >&2
+          sudo tar -xC /
+        fi
+      }
       ;;
     agent-workspace-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes"
       echo "tar -xf $FILE_NAME" >&2
-      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -x
+      dd_max_read "$FILE_SIZE" status=none | tar -x
       ;;
 #    *.tar)
 #      echo "$FILE_NAME is $FILE_SIZE bytes"
