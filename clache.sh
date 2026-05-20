@@ -74,24 +74,27 @@ PAX_HEADER="$TMP_DIR/pax_header"
 #
 helptext() {
 cat >&2 <<EOF
-${0##*/} [--extract] < tar-to-extract.tar
-${0##*/} --create -- FILE... > tar-to-create.tar
+${0##*/} [--nosudo] --extract < tar-to-extract.tar
+${0##*/} [--nosudo] --create -- FILE... > tar-to-create.tar
 
 DESCRIPTION
   Create or extract cache using tar.  Provide both relative or full path names
   to create the cache and it will later be restored.
 
 OPTIONS
-  --create -- FILE...
+  --create -- FILE..., -c -- FILE...
     Writes archive to stdout.  Creates a cache.  Provided on or more FILE to
     add to the cache.  Can be relative of full paths.
 
-  --extract
+  --extract, -e
     Reads a tar file from stdin.  Extracts the cache.
 
-  --nosudo
+  --nosudo, -n
     When creating or extracting an archive the full path archive can execute
     tar without sudo.
+
+  --help, -h
+    Show help.
 EOF
 exit 1
 }
@@ -225,9 +228,28 @@ extract() {
     true
   done
 }
+outer_tar_prefix() (
+  # The purpose of this function is to create a subshell which is equivalent to
+  # running `tar --format pax -c file.tar` which creates an outer tar header
+  # but only outputting the header without the rest of the tar file.
+  # This enables writing out a tar file to stdout in intermediate parts rather
+  # than requiring double the space for creating the cache.
+  tar --format pax -c "$1" | {
+    dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header"
+    header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
+    header_blocks="$(( (header_size + 511 ) / 512))"
+    dd bs=512 count="$header_blocks" status=none > "$TMP_DIR/prefix_header_body"
+    dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header_file"
+    # create tar prefix
+    cat "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file"
+  }
+)
 #
 # MAIN
 #
+if [ "$#" -lt 1 ]; then
+  helptext
+fi
 mode="extract"
 full_paths=()
 relative_paths=()
@@ -237,15 +259,15 @@ while [ "$#" -gt 0 ]; do
     -h|--help)
       helptext
       ;;
-    --create)
+    -c|--create)
       mode=create
       shift
       ;;
-    --extract)
+    -e|--extract)
       mode=extract
       shift
       ;;
-    --nosudo)
+    -n|--nosudo)
       nosudo=true
       shift
       ;;
@@ -277,17 +299,25 @@ else
         sudo tar --format pax --ignore-failed-read -c  -- \
           "${full_paths[@]}" > "${TMP_DIR}/agent-os-cache.tar"
       fi
+      cd "${TMP_DIR}"
+      outer_tar_prefix agent-os-cache.tar > agent-os-cache-prefix
+      # same as `tar --format pax -c agent-os-cache.tar` except it does not
+      # write the end or archive marker.
+      cat agent-os-cache-prefix agent-os-cache.tar
+      rm agent-os-cache.tar
     )
-    tar_files+=( agent-os-cache.tar )
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
       echo tar -c "${relative_paths[@]}" >&2
       tar --format pax --ignore-failed-read -c -- \
         "${relative_paths[@]}" > "${TMP_DIR}/agent-workspace-cache.tar"
+      cd "${TMP_DIR}"
+      tar --format pax -c agent-workspace-cache.tar
     )
-    tar_files+=( agent-workspace-cache.tar )
+  else
+    # no agent-workspace-cache.tar so we need to write out the "end of archive"
+    # marker bytes manually (two 512-byte blocks of all zeros)
+    dd if=/dev/zero bs=1024 count=1
   fi
-  cd "${TMP_DIR}"
-  tar --format pax -c "${tar_files[@]}"
 fi
