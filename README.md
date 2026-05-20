@@ -32,7 +32,7 @@ Create cache strategy: Files and folders that will be added to the cache will be
 broken up into two tar commands.
 
 1. `sudo tar` (sudo can be opt-out) from the system root when full paths are
-   given.  For permissions preservation.  If you have an ephemeral system which
+   given for permissions preservation.  If you have an ephemeral system which
    does not allow `sudo tar`, then use the `--nosudo` option documented below.
 2. Non-sudo tar for file paths relative to the current working directory.
 
@@ -100,7 +100,7 @@ OPTIONS
 - [x] Create a proof of concept for extraction via stream.
 - [x] Option parsing for creating the cache.
 - [x] Implent extracting the created cache.
-- [ ] Write up some docs.
-- [ ] Initial release.
+- [x] Write up some docs.
+- [x] Initial release.
 
 [opengroup pax publication]: https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html
