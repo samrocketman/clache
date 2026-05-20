@@ -272,6 +272,10 @@ largetar_dir="${TMP_DIR}"
 export largetar_dir nosudo
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --)
+      echo 'ERROR: the "--" option is not supported.' >&2
+      exit 1
+      ;;
     -h|--help)
       helptext
       ;;
@@ -345,6 +349,6 @@ else
   else
     # no agent-workspace-cache.tar so we need to write out the "end of archive"
     # marker bytes manually (two 512-byte blocks of all zeros)
-    dd if=/dev/zero bs=1024 count=1
+    dd if=/dev/zero bs=1024 count=1 status=none
   fi
 fi
