@@ -69,7 +69,9 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 PAXTAR_HEADER="$TMP_DIR/outer_tar"
 TAR_HEADER="$TMP_DIR/inner_tar"
 PAX_HEADER="$TMP_DIR/pax_header"
-
+#
+# FUNCTIONS (see main at the end)
+#
 helptext() {
 cat >&2 <<EOF
 ${0##*/} [--extract] < tar-to-extract.tar
@@ -178,12 +180,12 @@ fileSize() {
 ustarSize() {
   local size
   size="$(dd bs=1 skip=124 count=12 status=none | tr -d '\0')"
+  # convert octal to decimal
   echo "$((8#$size))"
 }
 paxField() {
   awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER"
 }
-
 readTarFile() {
   readTarHeader
   FILE_NAME="$(fileName)"
@@ -217,14 +219,15 @@ readTarFile() {
       ;;
   esac
 }
-
 extract() {
   # iterate all files
   while readTarFile; do
     true
   done
 }
-
+#
+# MAIN
+#
 mode="extract"
 full_paths=()
 relative_paths=()

@@ -10,7 +10,7 @@ No AI was used to create this project.
 
 - [x] Research ustar and pax tar formats.
 - [x] Create a proof of concept for extraction via stream.
-- [ ] Option parsing for creating the cache.
-- [ ] Implent extracting the created cache.
+- [x] Option parsing for creating the cache.
+- [x] Implent extracting the created cache.
 - [ ] Write up some docs.
 - [ ] Initial release.
