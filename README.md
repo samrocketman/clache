@@ -18,7 +18,7 @@ Extracting the cache from stdin without writing full tar files to disk (a few KB
 of header data gets written during stream inspection).
 
 ```bash
-aws s3 cp - s3://your-bucket/file.tar | clache.sh -n -e
+aws s3 cp s3://your-bucket/file.tar - | clache.sh -n -e
 ```
 
 # Project description
@@ -67,14 +67,14 @@ publication].
 
 ```
 clache.sh [--nosudo] --extract < tar-to-extract.tar
-clache.sh [--nosudo] --create -- FILE... > tar-to-create.tar
+clache.sh [--nosudo] --create FILE... > tar-to-create.tar
 
 DESCRIPTION
   Create or extract cache using tar.  Provide both relative or full path names
   to create the cache and it will later be restored.
 
 OPTIONS
-  --create -- FILE..., -c -- FILE...
+  --create FILE..., -c FILE...
     Writes archive to stdout.  Creates a cache.  Provided on or more FILE to
     add to the cache.  Can be relative of full paths.
 
@@ -93,14 +93,5 @@ OPTIONS
   --help, -h
     Show help.
 ```
-
-# Roadmap
-
-- [x] Research ustar and pax tar formats.
-- [x] Create a proof of concept for extraction via stream.
-- [x] Option parsing for creating the cache.
-- [x] Implent extracting the created cache.
-- [x] Write up some docs.
-- [x] Initial release.
 
 [opengroup pax publication]: https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html

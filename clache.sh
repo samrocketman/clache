@@ -1,6 +1,8 @@
 #!/bin/bash
-# Created by Sam Gleske
-# Sat May 16 05:58:44 EDT 2026
+# clache v0.1
+# Copyright (c) 2026 Sam Gleske https://github.com/samrocketman/clache
+# MIT Licensed
+# Initially Created Sat May 16 05:58:44 EDT 2026
 # Pop!_OS 24.04 LTS
 # Linux 6.18.7-76061807-generic x86_64
 # GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)
@@ -75,14 +77,14 @@ PAX_HEADER="$TMP_DIR/pax_header"
 helptext() {
 cat >&2 <<EOF
 ${0##*/} [--nosudo] --extract < tar-to-extract.tar
-${0##*/} [--nosudo] --create -- FILE... > tar-to-create.tar
+${0##*/} [--nosudo] --create FILE... > tar-to-create.tar
 
 DESCRIPTION
   Create or extract cache using tar.  Provide both relative or full path names
   to create the cache and it will later be restored.
 
 OPTIONS
-  --create -- FILE..., -c -- FILE...
+  --create FILE..., -c FILE...
     Writes archive to stdout.  Creates a cache.  Provided on or more FILE to
     add to the cache.  Can be relative of full paths.
 
