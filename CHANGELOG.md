@@ -1,3 +1,7 @@
+# clache v0.3 - May 21, 2026
+
+- Fix writing to stderr for informational messages.
+
 # clache v0.2 - May 20, 2026
 
 - Optimal extraction throughput by using 5MB block size instead of 512 byte

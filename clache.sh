@@ -1,5 +1,5 @@
 #!/bin/bash
-# clache v0.2
+# clache v0.3
 # Copyright (c) 2026 Sam Gleske https://github.com/samrocketman/clache
 # MIT Licensed
 # Initially Created Sat May 16 05:58:44 EDT 2026
@@ -130,7 +130,7 @@ determineTarFormat() {
     grep -i PaxHeader > /dev/null
   }; then
     if [ ! "$tar_format" = ustar ]; then
-      echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'."
+      echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'." >&2
       exit 1
     fi
     if [ ! "${typeflag}" = x ]; then
@@ -221,7 +221,7 @@ readTarFile() {
   FILE_SIZE="$(fileSize)"
   case "$FILE_NAME" in
     agent-os-cache.tar)
-      echo "$FILE_NAME is $FILE_SIZE bytes"
+      echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       dd_max_read "$FILE_SIZE" | {
         if [ "$nosudo" = true ]; then
           echo "tar -xC / -f $FILE_NAME" >&2
@@ -233,12 +233,12 @@ readTarFile() {
       }
       ;;
     agent-workspace-cache.tar)
-      echo "$FILE_NAME is $FILE_SIZE bytes"
+      echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       echo "tar -xf $FILE_NAME" >&2
       dd_max_read "$FILE_SIZE" status=none | tar -x
       ;;
 #    *.tar)
-#      echo "$FILE_NAME is $FILE_SIZE bytes"
+#      echo "$FILE_NAME is $FILE_SIZE bytes" >&2
 #      echo -n 'Number of tar entries: '
 #      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -t | wc -l
 #      ;;
