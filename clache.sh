@@ -191,7 +191,7 @@ fileName() {
   echo "$name"
 }
 ustarName() {
-  dd bs=100 count=1 status=none | sanitize_cntrl | tr -d '\0' | xargs
+  dd bs=100 count=1 status=none | sanitize_nonascii
 }
 fileSize() {
   local file_size pax_size
