@@ -275,7 +275,7 @@ outer_tar_prefix() (
   # This enables writing out a tar file to stdout in intermediate parts rather
   # than requiring double the space for creating the cache.
   set +o pipefail
-  tar --format pax -c "$1" | {
+  tar --format pax -c "$1" 2>/dev/null | {
     dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header"
     header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
     header_blocks="$(( (header_size + 511 ) / 512))"
@@ -353,11 +353,11 @@ else
       cd /
       if [ "$nosudo" = true ]; then
         echo "tar -c ${full_paths[*]}" >&2
-        tar --format pax --ignore-failed-read -c  -- \
+        tar --format pax -c -- \
           "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       else
         echo "sudo tar -c ${full_paths[*]}" >&2
-        sudo tar --format pax --ignore-failed-read -c  -- \
+        sudo tar --format pax -c -- \
           "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       fi
       cd "${largetar_dir}"
@@ -371,7 +371,7 @@ else
   if [ -n "${relative_paths:-}" ]; then
     (
       echo tar -c "${relative_paths[@]}" >&2
-      tar --format pax --ignore-failed-read -c -- \
+      tar --format pax -c -- \
         "${relative_paths[@]}" > "${largetar_dir}/agent-workspace-cache.tar"
       cd "${largetar_dir}"
       tar --format pax -c agent-workspace-cache.tar
