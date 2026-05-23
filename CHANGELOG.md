@@ -1,3 +1,11 @@
+# clache v0.5 - May 23, 2026
+
+More defensive validation
+
+- Validate pax inner tar is ustar format
+- More nonascii sanitizing like size and other fields.
+- ustar name is always ASCII
+
 # clache v0.4 - May 23, 2026
 
 - More strict inspection of tar format: sanitize non-ASCII and shell control
