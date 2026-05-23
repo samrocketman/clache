@@ -117,6 +117,9 @@ sanitize_cntrl() {
 isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]
 }
+getTarFormat() {
+  dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
+}
 determineTarFormat() {
   local typeflag
   dd bs=512 count=1 status=none > "$TAR_HEADER"
@@ -128,7 +131,7 @@ determineTarFormat() {
     # tar file finish
     exit 0
   fi
-  tar_format="$(dd if="$TAR_HEADER" bs=1 count=6 skip=257 status=none | sanitize_nonascii)"
+  tar_format="$(getTarFormat "$TAR_HEADER")"
   if [ ! "${tar_format}" = ustar ]; then
     echo 'ERROR: could not determine supported tar format; only ustar and pax(ustar) supported' >&2
     exit 1
@@ -176,6 +179,10 @@ readTarHeader() {
       dd bs=1 count="$header_size" status=none > "$PAX_HEADER"
   fi
   dd bs=512 count=1 status=none > "$TAR_HEADER"
+  if [ ! "$(getTarFormat "$TAR_HEADER")" = ustar ]; then
+    echo 'ERROR: inner tar is not expected format.' >&2
+    exit 1
+  fi
 }
 fileName() {
   local name pax_path
