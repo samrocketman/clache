@@ -370,7 +370,7 @@ else
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
-      echo tar -c "${relative_paths[@]}" >&2
+      echo "tar -c ${relative_paths[*]}" >&2
       tar --format pax -c -- \
         "${relative_paths[@]}" > "${largetar_dir}/agent-workspace-cache.tar"
       cd "${largetar_dir}"
