@@ -106,13 +106,13 @@ EOF
 exit 1
 }
 bin_to_hex() {
-  xxd -p | tr -d '\n'
+  xxd -p | LC_ALL=C tr -d '\n'
 }
 sanitize_nonascii() {
   LC_ALL=C tr -dc 'a-zA-Z0-9'
 }
 sanitize_cntrl() {
-  LC_ALL=C tr -d '[:cntrl:]'
+  LC_ALL=C tr -d '[:cntrl:]' | LC_ALL=C tr -d '\0'
 }
 isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]
@@ -197,7 +197,7 @@ fileSize() {
   local file_size pax_size
   file_size="$(ustarSize < "$TAR_HEADER")"
   if [ "$tar_format" = pax ]; then
-    pax_size="$(paxField size)"
+    pax_size="$(paxField size | sanitize_nonascii)"
     if [ -n "${pax_size:-}" ]; then
       file_size="$pax_size"
     fi
@@ -206,7 +206,7 @@ fileSize() {
 }
 ustarSize() {
   local size
-  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_cntrl | tr -d '\0')"
+  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonascii)"
   # convert octal to decimal
   echo "$((8#$size))"
 }
