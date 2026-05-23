@@ -108,6 +108,12 @@ exit 1
 bin_to_hex() {
   xxd -p | tr -d '\n'
 }
+sanitize_nonascii() {
+  LC_ALL=C tr -dc 'a-zA-Z0-9'
+}
+sanitize_cntrl() {
+  LC_ALL=C tr -d '[:cntrl:]'
+}
 isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]
 }
@@ -122,8 +128,12 @@ determineTarFormat() {
     # tar file finish
     exit 0
   fi
-  tar_format="$(dd if="$TAR_HEADER" bs=1 count=6 skip=257 status=none | tr -d '\0')"
-  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none)"
+  tar_format="$(dd if="$TAR_HEADER" bs=1 count=6 skip=257 status=none | sanitize_nonascii)"
+  if [ ! "${tar_format}" = ustar ]; then
+    echo 'ERROR: could not determine supported tar format; only ustar and pax(ustar) supported' >&2
+    exit 1
+  fi
+  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none | sanitize_nonascii)"
   if {
     [ "${typeflag}" = x ] ||
     dd if="$TAR_HEADER" bs=100 count=1 status=none | \
@@ -139,11 +149,14 @@ determineTarFormat() {
     fi
     tar_format=pax
     mv "$TAR_HEADER" "$PAXTAR_HEADER"
+  elif [ -z "${typeflag:-}" ] || [ "${typeflag}" = 0 ]; then
+    tar_format=ustar
   elif [ "${typeflag}" = g ]; then
     echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
     exit 1
   else
-    tar_format=ustar
+    echo "ERROR: Unsupported tar format detected.  Found typeflag '${typeflag}'." >&2
+    exit 1
   fi
 }
 readTarHeader() {
@@ -178,7 +191,7 @@ fileName() {
   echo "$name"
 }
 ustarName() {
-  dd bs=100 count=1 status=none | tr -d '\0' | xargs
+  dd bs=100 count=1 status=none | sanitize_cntrl | tr -d '\0' | xargs
 }
 fileSize() {
   local file_size pax_size
@@ -193,12 +206,12 @@ fileSize() {
 }
 ustarSize() {
   local size
-  size="$(dd bs=1 skip=124 count=12 status=none | tr -d '\0')"
+  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_cntrl | tr -d '\0')"
   # convert octal to decimal
   echo "$((8#$size))"
 }
 paxField() {
-  awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER"
+  awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER" | sanitize_cntrl
 }
 dd_max_read() {
   local FILE_SIZE max_bs count remainder
