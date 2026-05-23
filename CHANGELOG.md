@@ -1,3 +1,12 @@
+# clache v0.4 - May 23, 2026
+
+- More strict inspection of tar format: sanitize non-ASCII and shell control
+  characters from key fields.  To avoid a binary file introducing control
+  characters in echo output.
+- Remove `--ignore-failed-read` option since it is not widely supported.
+- Minor change to one echo.
+- Shellcheck utility passes.
+
 # clache v0.3 - May 21, 2026
 
 - Fix writing to stderr for informational messages.
