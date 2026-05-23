@@ -147,7 +147,7 @@ determineTarFormat() {
       echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
       exit 1
     fi
-    tar_format=pax
+    tar_format='pax'
     mv "$TAR_HEADER" "$PAXTAR_HEADER"
   elif [ -z "${typeflag:-}" ] || [ "${typeflag}" = 0 ]; then
     tar_format=ustar
@@ -214,7 +214,7 @@ paxField() {
   awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER" | sanitize_cntrl
 }
 dd_max_read() {
-  local FILE_SIZE max_bs count remainder
+  local FILE_SIZE max_bs remainder
   # To reasonably maximize throughput dd will read max_bs of data at a time.
   # 5MB read buffer
   max_bs=5242880
@@ -347,7 +347,6 @@ if [ "$mode" = extract ]; then
   extract
 else
   # create
-  tar_files=()
   if [ -n "${full_paths:-}" ]; then
     (
       cd /
@@ -357,6 +356,9 @@ else
           "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       else
         echo "sudo tar -c ${full_paths[*]}" >&2
+        # I want the tar to be sudo and write to current nonsudo user so
+        # disable shellcheck warning.
+        # shellcheck disable=SC2024
         sudo tar --format pax -c -- \
           "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       fi
