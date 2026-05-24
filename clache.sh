@@ -9,6 +9,9 @@
 # dd (coreutils) 9.4
 # xxd 2023-10-25 by Juergen Weigert et al.
 # GNU Awk 5.2.1, API 3.2, PMA Avon 8-g1, (GNU MPFR 4.2.1, GNU MP 6.3.0)
+# od (GNU coreutils) 9.4
+# bc 1.07.1
+#
 # DESCRIPTION
 #   This script is intended for CI systems to be able to create and extract a
 #   cache using streams.  Use case would be a cloud object store downloading a
@@ -133,7 +136,12 @@ verify_tar_chksum() {
     } | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
   )"
   calculated_checksum="$(printf '%o\n' "$calculated_checksum")"
-  tarfile_checksum="$(dd if="$1" skip=148 bs=1 count=8 status=none | sed 's/^[ 0]*//' | xargs)"
+  tarfile_checksum="$(
+    dd if="$1" skip=148 bs=1 count=8 status=none | \
+      sanitize_nonnumeric | \
+      sed 's/^[ 0]*//' | \
+      xargs
+  )"
   if [ ! "$tarfile_checksum" -eq "$calculated_checksum" ]; then
     echo 'ERROR: Tar header checksum invalid.' >&2
     exit 1
