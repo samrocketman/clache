@@ -358,11 +358,11 @@ else
     (
       cd /
       if [ "$nosudo" = true ]; then
-        echo "tar -c ${full_paths[*]}" >&2
+        echo "tar --format pax -cC / ${full_paths[*]}" >&2
         tar --format pax -c -- \
           "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
       else
-        echo "sudo tar -c ${full_paths[*]}" >&2
+        echo "sudo tar --format pax -cC / ${full_paths[*]}" >&2
         # I want the tar to be sudo and write to current nonsudo user so
         # disable shellcheck warning.
         # shellcheck disable=SC2024
