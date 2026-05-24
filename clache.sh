@@ -218,6 +218,11 @@ fileSize() {
   if [ "$tar_format" = pax ]; then
     pax_size="$(paxField size | sanitize_nonnumeric)"
     if [ -n "${pax_size:-}" ]; then
+      # inverted logic to account for malformed expression errors
+      if ! [ "$pax_size" -ge 0 ]; then
+        echo 'ERROR: Invalid pax header file size has been encountered.' >&2
+        exit 1
+      fi
       file_size="$pax_size"
     fi
   fi
