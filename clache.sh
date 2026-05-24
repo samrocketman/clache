@@ -66,7 +66,19 @@
 #
 #   Only ustar and pax(ustar) file formats supported.
 #   https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html
-#
+
+# Quickly check for prerequisite utilities
+failed_preflight=false
+for x in awk bc od dd tar xxd tr; do
+  if ! type -P "$x" > /dev/null; then
+    echo "Missing dependency '$x'." >&2
+    failed_preflight=true
+  fi
+done
+if [ "$failed_preflight" = true ]; then
+  exit 1
+fi
+
 set -euo pipefail
 export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
