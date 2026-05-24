@@ -1,3 +1,7 @@
+# clache v0.7 - May 23, 2026
+
+- Echo statements show pax format and root path.
+
 # clache v0.6 - May 23, 2026
 
 - Bugfix sanitizing nonascii characters.  Previously alphanumeric by mistake.
