@@ -236,8 +236,45 @@ ustarSize() {
   # convert octal to decimal
   printf '%d\n' "0${size}"
 }
+paxFieldAwkScript() {
+cat<<'EOF'
+BEGIN {
+  cont=0
+}
+{
+  current_line=length($0)+1
+}
+cont > 0 {
+  # complex pax header continued
+  cont=cont+current_line
+  headers[name]=headers[name]$0"\n"
+  if(cont >= size[name]) {
+    cont=0
+  }
+  next
+}
+{
+  record=substr($0, length($1)+2)
+  name=record
+  gsub(/=.*$/, "", name)
+  value=substr(record, length(name)+2)
+  headers[name]=value"\n"
+  size[name]=$1
+  if($1 == current_line) {
+    # simple pax header
+    next
+  }
+}
+{
+  cont=current_line
+}
+END {
+  printf("%s", headers[field])
+}
+EOF
+}
 paxField() {
-  awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER" | sanitize_cntrl
+  < "$PAX_HEADER" awk -v field="$1" "$(paxFieldAwkScript)" | sanitize_cntrl
 }
 dd_max_read() {
   local FILE_SIZE max_bs remainder
