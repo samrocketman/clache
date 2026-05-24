@@ -108,6 +108,9 @@ exit 1
 bin_to_hex() {
   xxd -p | LC_ALL=C tr -d '\n'
 }
+sanitize_nonnumeric() {
+  LC_ALL=C tr -dc '0-9'
+}
 sanitize_nonascii() {
   LC_ALL=C tr -dc '[:print:]'
 }
@@ -204,7 +207,7 @@ fileSize() {
   local file_size pax_size
   file_size="$(ustarSize < "$TAR_HEADER")"
   if [ "$tar_format" = pax ]; then
-    pax_size="$(paxField size | sanitize_nonascii)"
+    pax_size="$(paxField size | sanitize_nonnumeric)"
     if [ -n "${pax_size:-}" ]; then
       file_size="$pax_size"
     fi
@@ -213,9 +216,11 @@ fileSize() {
 }
 ustarSize() {
   local size
-  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonascii)"
+  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonnumeric)"
+  # ustar size can be zero or space padded
+  size="$( echo "$size" | awk '{gsub("^[ 0]+", "", $0); print; }' )"
   # convert octal to decimal
-  echo "$((8#$size))"
+  printf '%d\n' "0${size}"
 }
 paxField() {
   awk '$2 ~ /^'"$1"'=/ { gsub(/[^=]*=/, "", $0); print }' < "$PAX_HEADER" | sanitize_cntrl
