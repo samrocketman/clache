@@ -154,7 +154,12 @@ verify_tar_chksum() {
       sed 's/^[ 0]*//' | \
       xargs
   )"
-  if [ ! "$tarfile_checksum" -eq "$calculated_checksum" ]; then
+  # Inverted to account for arithmetic failures
+  if ! {
+    [ "$tarfile_checksum" -eq "$calculated_checksum" ] &&
+    [ "$tarfile_checksum" -gt 0 ] &&
+    [ "$calculated_checksum" -gt 0 ]
+  }; then
     echo 'ERROR: Tar header checksum invalid.' >&2
     exit 1
   fi
