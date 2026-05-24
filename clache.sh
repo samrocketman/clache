@@ -126,6 +126,9 @@ bin_to_hex() {
 sanitize_nonnumeric() {
   LC_ALL=C tr -dc '0-9'
 }
+sanitize_nonoctal() {
+  LC_ALL=C tr -dc '0-7'
+}
 sanitize_nonascii() {
   LC_ALL=C tr -dc '[:print:]'
 }
@@ -153,7 +156,7 @@ verify_tar_chksum() {
   calculated_checksum="$(printf '%o\n' "$calculated_checksum")"
   tarfile_checksum="$(
     dd if="$1" skip=148 bs=1 count=8 status=none | \
-      sanitize_nonnumeric | \
+      sanitize_nonoctal | \
       sed 's/^[ 0]*//' | \
       xargs
   )"
@@ -269,7 +272,7 @@ fileSize() {
 }
 ustarSize() {
   local size
-  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonnumeric)"
+  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonoctal)"
   # ustar size can be zero or space padded
   size="$( echo "$size" | awk '{gsub("^[ 0]+", "", $0); print; }' )"
   # convert octal to decimal
