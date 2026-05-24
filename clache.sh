@@ -1,5 +1,5 @@
 #!/bin/bash
-# clache v0.5
+# clache v0.6
 # Copyright (c) 2026 Sam Gleske https://github.com/samrocketman/clache
 # MIT Licensed
 # Initially Created Sat May 16 05:58:44 EDT 2026
@@ -109,10 +109,10 @@ bin_to_hex() {
   xxd -p | LC_ALL=C tr -d '\n'
 }
 sanitize_nonascii() {
-  LC_ALL=C tr -dc 'a-zA-Z0-9'
+  LC_ALL=C tr -dc '[:print:]'
 }
 sanitize_cntrl() {
-  LC_ALL=C tr -d '[:cntrl:]' | LC_ALL=C tr -d '\0'
+  LC_ALL=C tr -d '[:cntrl:]\0'
 }
 isBlockZeros() {
   [ "$(dd bs=512 count=1 status=none | bin_to_hex | sed 's/0*/0/')" = 0 ]

@@ -1,3 +1,7 @@
+# clache v0.6 - May 23, 2026
+
+- Bugfix sanitizing nonascii characters.  Previously alphanumeric by mistake.
+
 # clache v0.5 - May 23, 2026
 
 More defensive validation
