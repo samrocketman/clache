@@ -124,6 +124,7 @@ getTarFormat() {
   dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
 }
 verify_tar_chksum() {
+  local calculated_checksum tarfile_checksum
   calculated_checksum="$(
     {
       dd if="$1" bs=148 count=1 iflag=fullblock status=none
