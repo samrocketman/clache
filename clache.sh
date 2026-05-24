@@ -204,16 +204,18 @@ readTarHeader() {
   if [ "$tar_format" = ustar ]; then
     return
   fi
-  local header_size header_blocks
+  local header_size
   header_size="$(ustarSize < "$PAXTAR_HEADER")"
-  # equalent to Math.ceil for upper 512 byte block size
-  header_blocks="$(( (header_size + 511 ) / 512))"
+  # 5MB header size limit
+  if [ "$header_size" -gt 5242880 ]; then
+    echo 'ERROR: aborted because pax header size is greater than 5MB.' >&2
+    exit 1
+  fi
   # read from stdin in 512 byte blocks but only write real header size to disk
-  if [ "$header_blocks" = 0 ]; then
+  if [ "$header_size" -eq 0 ]; then
     echo > "$PAX_HEADER"
   else
-    dd bs=512 count="$header_blocks" status=none | \
-      dd bs=1 count="$header_size" status=none > "$PAX_HEADER"
+    dd_max_read "$header_size" | trim=1 dd_max_read "$header_size" > "$PAX_HEADER"
   fi
   dd bs=512 count=1 status=none > "$TAR_HEADER"
   verify_tar_chksum "$TAR_HEADER"
@@ -309,7 +311,9 @@ dd_max_read() {
   max_bs=5242880
   FILE_SIZE="$1"
   # size to nearest 512-byte block
-  FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
+  if [ -z "${trim:-}" ]; then
+    FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
+  fi
   remainder="$(( FILE_SIZE%max_bs ))"
   dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
   if [ "$remainder" -gt 0 ]; then
