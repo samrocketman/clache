@@ -138,6 +138,9 @@ isBlockZeros() {
 getTarFormat() {
   dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
 }
+getTarTypeflag() {
+  dd if="$1" bs=1 count=1 skip=156 status=none | sanitize_nonascii | tr -d ' '
+}
 verify_tar_chksum() {
   local calculated_checksum tarfile_checksum
   calculated_checksum="$(
@@ -181,7 +184,7 @@ determineTarFormat() {
     echo 'ERROR: could not determine supported tar format; only ustar and pax(ustar) supported' >&2
     exit 1
   fi
-  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none | sanitize_nonascii | tr -d ' ')"
+  typeflag="$(getTarTypeflag "$TAR_HEADER")"
   if [ "${typeflag}" = x ]; then
     if [ ! "$tar_format" = ustar ]; then
       echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'." >&2
@@ -221,6 +224,14 @@ readTarHeader() {
   verify_tar_chksum "$TAR_HEADER"
   if [ ! "$(getTarFormat "$TAR_HEADER")" = ustar ]; then
     echo 'ERROR: inner tar is not expected format.' >&2
+    exit 1
+  fi
+  local typeflag
+  typeflag="$(getTarTypeflag "$TAR_HEADER")"
+  if ! {
+    [ -z "${typeflag:-}" ] || [ "${typeflag}" = 0 ]
+  }; then
+    echo 'ERROR: unexpected inner tar typeflag detected.' >&2
     exit 1
   fi
 }
