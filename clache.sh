@@ -123,6 +123,21 @@ isBlockZeros() {
 getTarFormat() {
   dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
 }
+verify_tar_chksum() {
+  calculated_checksum="$(
+    {
+      dd if="$1" bs=148 count=1 iflag=fullblock status=none
+      echo -n '        '
+      dd if="$1" skip=156 bs=1 count=356 iflag=fullblock status=none
+    } | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
+  )"
+  calculated_checksum="$(printf '%o\n' "$calculated_checksum")"
+  tarfile_checksum="$(dd if="$1" skip=148 bs=1 count=8 status=none | sed 's/^[ 0]*//' | xargs)"
+  if [ ! "$tarfile_checksum" -eq "$calculated_checksum" ]; then
+    echo 'ERROR: Tar header checksum invalid.' >&2
+    exit 1
+  fi
+}
 determineTarFormat() {
   local typeflag
   dd bs=512 count=1 status=none > "$TAR_HEADER"
@@ -134,23 +149,16 @@ determineTarFormat() {
     # tar file finish
     exit 0
   fi
+  verify_tar_chksum "$TAR_HEADER"
   tar_format="$(getTarFormat "$TAR_HEADER")"
   if [ ! "${tar_format}" = ustar ]; then
     echo 'ERROR: could not determine supported tar format; only ustar and pax(ustar) supported' >&2
     exit 1
   fi
-  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none | sanitize_nonascii)"
-  if {
-    [ "${typeflag}" = x ] ||
-    dd if="$TAR_HEADER" bs=100 count=1 status=none | \
-    grep -i PaxHeader > /dev/null
-  }; then
+  typeflag="$(dd if="$TAR_HEADER" bs=1 count=1 skip=156 status=none | sanitize_nonascii | tr -d ' ')"
+  if [ "${typeflag}" = x ]; then
     if [ ! "$tar_format" = ustar ]; then
       echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'." >&2
-      exit 1
-    fi
-    if [ ! "${typeflag}" = x ]; then
-      echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
       exit 1
     fi
     tar_format='pax'
@@ -158,7 +166,7 @@ determineTarFormat() {
   elif [ -z "${typeflag:-}" ] || [ "${typeflag}" = 0 ]; then
     tar_format=ustar
   elif [ "${typeflag}" = g ]; then
-    echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag '${typeflag}'." >&2
+    echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag 'g'." >&2
     exit 1
   else
     echo "ERROR: Unsupported tar format detected.  Found typeflag '${typeflag}'." >&2
@@ -182,6 +190,7 @@ readTarHeader() {
       dd bs=1 count="$header_size" status=none > "$PAX_HEADER"
   fi
   dd bs=512 count=1 status=none > "$TAR_HEADER"
+  verify_tar_chksum "$TAR_HEADER"
   if [ ! "$(getTarFormat "$TAR_HEADER")" = ustar ]; then
     echo 'ERROR: inner tar is not expected format.' >&2
     exit 1
