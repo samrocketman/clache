@@ -295,7 +295,7 @@ get_pax_field() {
     if [ -z "${record_header:-}" ]; then
       break
     fi
-    if ! grep -E '^[0-9]+ [-._a-zA-Z0-9]+$' <<< "$record_header" > /dev/null; then
+    if ! LC_ALL=C grep -E '^[0-9]+ [-._a-zA-Z0-9]+$' <<< "$record_header" > /dev/null; then
       echo 'ERROR: A malformed pax record was encountered.' >&2
       exit 1
     fi
