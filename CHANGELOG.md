@@ -1,6 +1,7 @@
 # clache v0.10 - May 25, 2026
 
 - Bugfix internal function `dd_max_read` so `bs=0` is not possible.
+- Bugfix desynchronized parser bug where dd may not fully read the block data.
 
 # clache v0.9 - May 25, 2026
 
