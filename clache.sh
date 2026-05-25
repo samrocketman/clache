@@ -138,7 +138,8 @@ sanitize_cntrl() {
   LC_ALL=C tr -d '[:cntrl:]\0'
 }
 isBlockZeros() {
-  [ -z "$(dd bs=512 count=1 status=none | bin_to_hex | tr -d '0')" ]
+  local block="$(dd bs=512 count=1 status=none | bin_to_hex | sed -E 's/^0+/0/')"
+  [ -n "${block:-}" ] && [ "$block" = 0 ]
 }
 getTarFormat() {
   dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
