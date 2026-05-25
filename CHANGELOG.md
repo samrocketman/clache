@@ -1,3 +1,7 @@
+# clache v0.9
+
+- Internal function `dd_max_read` reads only what is necessary.
+
 # clache v0.8 - May 24, 2026
 
 More robust tar handling surfacing failures as soon as possible.
