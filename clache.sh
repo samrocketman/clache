@@ -373,6 +373,7 @@ dd_max_read() {
     skip="$(( ((skip+511)/512)*512 ))"
   fi
   if [ "${skip:-0}" -gt 0 ]; then
+    # negative file sizes get ignored later with a -gt 0 check
     FILE_SIZE="$((FILE_SIZE-skip))"
   fi
   if [ "$skip" -gt "$max_bs" ]; then
@@ -411,7 +412,7 @@ readTarFile() {
     pwd-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       echo "tar -xf $FILE_NAME" >&2
-      dd_max_read "$FILE_SIZE" status=none | tar -x
+      dd_max_read "$FILE_SIZE" | tar -x
       ;;
     *)
       # skip processing
@@ -541,6 +542,6 @@ else
     )
   else
     # End of pax tar archive is two 512-byte blocks of all zeros.
-    dd if=/dev/zero bs=1024 count=1 status=none
+    dd if=/dev/zero bs=1024 count=1
   fi
 fi
