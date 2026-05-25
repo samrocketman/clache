@@ -53,8 +53,8 @@ files should always be created with one of the following commands.
 Expected tar layout:
 
     your-cache.tar
-      |- agent-os-cache.tar - the sudo-created tar file.
-      |- agent-workspace-cache.tar - working directory tar file.
+      |- os-cache.tar - the sudo-created tar file.
+      |- pwd-cache.tar - working directory tar file.
 
 # Tar support
 
