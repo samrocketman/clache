@@ -40,8 +40,8 @@
 #   Expected tar layout:
 #
 #     your-cache.tar
-#       |- agent-os-cache.tar - the sudo-created tar file.
-#       |- agent-workspace-cache.tar - working directory tar file.
+#       |- os-cache.tar - the sudo-created tar file.
+#       |- pwd-cache.tar - working directory tar file.
 #
 # PERFORMANCE FYI
 #
@@ -381,7 +381,7 @@ readTarFile() {
   FILE_NAME="$(fileName)"
   FILE_SIZE="$(fileSize)"
   case "$FILE_NAME" in
-    agent-os-cache.tar)
+    os-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       dd_max_read "$FILE_SIZE" | {
         if [ "$nosudo" = true ]; then
@@ -393,7 +393,7 @@ readTarFile() {
         fi
       }
       ;;
-    agent-workspace-cache.tar)
+    pwd-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       echo "tar -xf $FILE_NAME" >&2
       dd_max_read "$FILE_SIZE" status=none | tar -x
@@ -506,39 +506,32 @@ else
   # create
   if [ -n "${full_paths:-}" ]; then
     (
-      cd /
-      if [ "$nosudo" = true ]; then
-        echo "tar --format pax -cC / ${full_paths[*]}" >&2
-        tar --format pax -c -- \
-          "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
-      else
-        echo "sudo tar --format pax -cC / ${full_paths[*]}" >&2
-        # I want the tar to be sudo and write to current nonsudo user so
-        # disable shellcheck warning.
-        # shellcheck disable=SC2024
-        sudo tar --format pax -c -- \
-          "${full_paths[@]}" > "${largetar_dir}/agent-os-cache.tar"
+      archive_command=()
+      if [ "$nosudo" = false ]; then
+        archive_command+=( sudo )
       fi
+      archive_command+=( tar --format pax -cC / -- "${full_paths[@]}" )
+      echo "${archive_command[*]}"
+      "${archive_command[@]}" > "${largetar_dir}/os-cache.tar"
       cd "${largetar_dir}"
-      # same as `tar --format pax -c agent-os-cache.tar` except it does not
+      # same as `tar --format pax -c os-cache.tar` except it does not
       # write the end or archive marker.
-      outer_tar_prefix agent-os-cache.tar > "$TMP_DIR"/agent-os-cache-prefix
-      cat "$TMP_DIR"/agent-os-cache-prefix agent-os-cache.tar
-      rm -f agent-os-cache.tar
+      outer_tar_prefix os-cache.tar > "$TMP_DIR"/os-cache-prefix
+      cat "$TMP_DIR"/os-cache-prefix os-cache.tar
+      rm -f os-cache.tar
     )
   fi
   if [ -n "${relative_paths:-}" ]; then
     (
-      echo "tar --format pax -c ${relative_paths[*]}" >&2
-      tar --format pax -c -- \
-        "${relative_paths[@]}" > "${largetar_dir}/agent-workspace-cache.tar"
+      archive_command=( tar --format pax -c -- "${relative_paths[@]}" )
+      echo "${archive_command[*]}"
+      "${archive_command[@]}" > "${largetar_dir}/pwd-cache.tar"
       cd "${largetar_dir}"
-      tar --format pax -c agent-workspace-cache.tar
-      rm -f agent-workspace-cache.tar
+      tar --format pax -c pwd-cache.tar
+      rm -f pwd-cache.tar
     )
   else
-    # no agent-workspace-cache.tar so we need to write out the "end of archive"
-    # marker bytes manually (two 512-byte blocks of all zeros)
+    # End of pax tar archive is two 512-byte blocks of all zeros.
     dd if=/dev/zero bs=1024 count=1 status=none
   fi
 fi
