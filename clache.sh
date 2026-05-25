@@ -222,7 +222,7 @@ readTarHeader() {
     echo 'ERROR: aborted because pax header size is greater than 5MB.' >&2
     exit 1
   fi
-  # read from stdin in 512 byte blocks but only write real header size to disk
+  # Read 512-byte blocks from stdin and trim the data before writing to disk.
   if [ "$header_size" -eq 0 ]; then
     echo > "$PAX_HEADER"
   else
@@ -292,7 +292,7 @@ get_pax_field() {
   until [ "$skip_bytes" -eq "$previously_skipped" ]; do
     record_header="$(
       set +o pipefail
-      skip="$skip_bytes" trim=1 dd_max_read $max_bs < "$1" | \
+      skip="$skip_bytes" trim=1 dd_max_read "$max_bs" < "$1" | \
       awk '{gsub(/=.*$/, "", $0);print;exit}'
     )"
     if [ -z "${record_header:-}" ]; then
@@ -322,9 +322,9 @@ get_pax_field() {
       exit 1
     fi
     if [ "$record_name" = "$2" ]; then
-      skip="$skip_bytes" trim=1 dd_max_read "$record_size" < "$1" | \
-        dd bs="$record_size" count=1 iflag=fullblock status=none | \
-        skip="$header_size" trim=1 dd_max_read "$((record_size-header_size))"
+      # Retrieve the value of the matching pax header record.
+      skip="$skip_bytes" trim=1 dd_max_read "$((skip_bytes+record_size))" < "$1" | \
+        skip="$header_size" trim=1 dd_max_read "$record_size"
       break
     fi
     previously_skipped="$skip_bytes"
@@ -345,23 +345,35 @@ paxField() {
   fi
 }
 dd_max_read() {
-  local FILE_SIZE max_bs remainder
+  # skip and trim env vars are intended to be optionally passed by prefix.
+  # e.g. skip="bs to skip" trim=1 dd_max_read "max_bs to read"
+  # trim - 1: will read exact bytes; not defined reads nearest 512-byte block.
+  # skip - skip bs before reading up to max_bs (do not read beyond max_bs)
+  local FILE_SIZE max_bs
   # To reasonably maximize throughput dd will read max_bs of data at a time.
   # 5MB read buffer
   max_bs=5242880
   FILE_SIZE="$1"
-  # size to nearest 512-byte block
   if [ -z "${trim:-}" ]; then
+    # size to nearest 512-byte block
     FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
+    skip="$(( ((skip+511)/512)*512 ))"
   fi
-  remainder="$(( FILE_SIZE%max_bs ))"
   if [ "${skip:-0}" -gt 0 ]; then
+    FILE_SIZE="$((FILE_SIZE-skip))"
+  fi
+  if [ "${skip:-0}" -gt 0 ]; then
+    if [ "$skip" -gt "$max_bs" ]; then
+      dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0 iflag=fullblock status=none
+      skip="$(( skip%max_bs ))"
+    fi
     dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
   fi
-  dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
-  if [ "$remainder" -gt 0 ]; then
-    dd bs="$remainder" count=1 iflag=fullblock status=none
+  if [ "$FILE_SIZE" -gt "$max_bs" ]; then
+    dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
+    FILE_SIZE="$(( FILE_SIZE%max_bs ))"
   fi
+  dd bs="$FILE_SIZE" count=1 iflag=fullblock status=none
 }
 readTarFile() {
   local FILE_NAME FILE_SIZE
