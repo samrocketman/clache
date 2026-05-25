@@ -144,7 +144,8 @@ sanitize_cntrl() {
   LC_ALL=C tr -d '[:cntrl:]\0'
 }
 isBlockZeros() {
-  local block="$(dd bs=512 count=1 | bin_to_hex | sed -E 's/^0+/0/')"
+  local block
+  block="$(dd bs=512 count=1 | bin_to_hex | sed -E 's/^0+/0/')"
   [ -n "${block:-}" ] && [ "$block" = 0 ]
 }
 getTarFormat() {
@@ -294,12 +295,18 @@ ustarSize() {
   printf '%d\n' "0${size}"
 }
 get_pax_field() {
-  local max_bs skip_bytes previously_skipped
-  local record_header record_name record_size header_size
+  local max_bs skip_bytes previously_skipped record_header record_name
+  local record_size header_size pax_record_limit pax_records
   max_bs="$(ustarSize < "$PAXTAR_HEADER")"
   skip_bytes=0
   previously_skipped=-1
+  pax_record_limit=1000
+  pax_records=0
   until [ "$skip_bytes" -eq "$previously_skipped" ]; do
+    if [ "$pax_records" -gt "$pax_record_limit" ]; then
+      echo "ERROR: encountered more pax records than allowed (limit ${pax_record_limit})." >&2
+      exit 1
+    fi
     record_header="$(
       set +o pipefail
       skip="$skip_bytes" trim=1 dd_max_read "$max_bs" < "$1" | \
@@ -308,6 +315,7 @@ get_pax_field() {
     if [ -z "${record_header:-}" ]; then
       break
     fi
+    pax_records="$((pax_records+1))"
     if ! LC_ALL=C grep -E '^[0-9]+ [-._a-zA-Z0-9]+$' <<< "$record_header" > /dev/null; then
       echo 'ERROR: A malformed pax record was encountered.' >&2
       exit 1
@@ -319,9 +327,9 @@ get_pax_field() {
       exit 1
     fi
     # newline included in size intentional (because record should exclude =)
-    header_size="$(echo "${record_header}" | wc -c)"
+    header_size="$(printf '%s\n' "${record_header}" | LC_ALL=C wc -c)"
     if ! {
-      [ "${#record_size}" -lt "$file_size_digits_limit" ] &&
+      [ "${#record_size}" -le "$file_size_digits_limit" ] &&
       [ "$record_size" -le "$max_bs" ] &&
       [ "$record_size" -ge "$((header_size+1))" ] &&
       # minimum pax record is `5 a=\n` which is just key "a" with empty value.
@@ -348,7 +356,7 @@ paxField() {
   if [ "$1" = size ]; then
     local pax_size
     pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric | sed -E 's/^0+//')"
-    if [ "${#pax_size}" -ge "$file_size_digits_limit" ]; then
+    if [ "${#pax_size}" -gt "$file_size_digits_limit" ]; then
       echo 'ERROR: pax size header returned greater than 10 terabytes.' >&2
       exit 1
     fi
@@ -362,28 +370,29 @@ dd_max_read() {
   # e.g. skip="bs to skip" trim=1 dd_max_read "max_bs to read"
   # trim - 1: will read exact bytes; not defined reads nearest 512-byte block.
   # skip - skip bs before reading up to max_bs (do not read beyond max_bs)
-  local FILE_SIZE max_bs
+  local FILE_SIZE max_bs seek
   # To reasonably maximize throughput dd will read max_bs of data at a time.
   # 5MB read buffer
   max_bs=5242880
-  FILE_SIZE="$1"
+  FILE_SIZE="${1:-0}"
+  seek="${skip:-0}"
   if [ -z "${trim:-}" ]; then
     # size to nearest 512-byte block
     FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
-    skip="$(( ((skip+511)/512)*512 ))"
+    seek="$(( ((seek+511)/512)*512 ))"
   fi
-  if [ "${skip:-0}" -gt 0 ]; then
+  if [ "${seek}" -gt 0 ]; then
     # negative file sizes get ignored later with a -gt 0 check
-    FILE_SIZE="$((FILE_SIZE-skip))"
+    FILE_SIZE="$((FILE_SIZE-seek))"
   fi
-  if [ "$skip" -gt "$max_bs" ]; then
-    dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0
-    skip="$(( skip%max_bs ))"
+  if [ "${seek}" -gt "$max_bs" ]; then
+    dd bs="$max_bs" skip="$(( seek/max_bs ))" count=0
+    seek="$(( seek%max_bs ))"
   fi
-  if [ "${skip}" -gt 0 ]; then
-    dd bs="$skip" skip=1 count=0
+  if [ "${seek}" -gt 0 ]; then
+    dd bs="$seek" skip=1 count=0
   fi
-  if [ "$FILE_SIZE" -gt "$max_bs" ]; then
+  if [ "${FILE_SIZE}" -gt "$max_bs" ]; then
     dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))"
     FILE_SIZE="$(( FILE_SIZE%max_bs ))"
   fi
