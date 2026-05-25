@@ -83,9 +83,6 @@ set -euo pipefail
 export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
-PAXTAR_HEADER="$TMP_DIR/outer_tar"
-TAR_HEADER="$TMP_DIR/inner_tar"
-PAX_HEADER="$TMP_DIR/pax_header"
 
 # clear internally used vars
 export skip trim
@@ -286,8 +283,7 @@ ustarSize() {
 get_pax_field() {
   local max_bs skip_bytes previously_skipped
   local record_header record_name record_size header_size
-  # 5MB is max
-  max_bs=5242880
+  max_bs="$(ustarSize < "$PAXTAR_HEADER")"
   skip_bytes=0
   previously_skipped=-1
   until [ "$skip_bytes" -eq "$previously_skipped" ]; do
@@ -299,6 +295,10 @@ get_pax_field() {
     if [ -z "${record_header:-}" ]; then
       break
     fi
+    if ! grep -E '^[0-9]+ [-._a-zA-Z0-9]+$' <<< "$record_header" > /dev/null; then
+      echo 'ERROR: A malformed pax record was encountered.' >&2
+      exit 1
+    fi
     record_name="${record_header#* }"
     record_size="$(sanitize_nonnumeric <<< "${record_header% *}")"
     if [ ! "$record_size" = "$(awk '{print $1}' <<< "${record_header}")" ]; then
@@ -307,18 +307,17 @@ get_pax_field() {
     fi
     if ! {
       [ "${#record_size}" -le 18 ] &&
-      [ "$record_size" -le "$max_bs" ]
+      [ "$record_size" -le "$max_bs" ] &&
+      # minimum pax record is `5 a=\n` which is just key "a" with empty value.
+      [ "$record_size" -gt 5 ] &&
+      [ "$((skip_bytes+record_size))" -le "$max_bs" ]
     } 2> /dev/null; then
-      echo 'ERROR: A malicious pax header record set its size to greater than 5MB.' >&2
+      echo 'ERROR: A malicious pax header record attempted to reach outside of the pax header.' >&2
       exit 1
     fi
     if [ "$record_name" = "$2" ]; then
       # newline included in size intentional (because record should exclude =)
-      header_size="$(echo "${record_size} ${record_name}" | wc -c)"
-      if [ "$((skip_bytes+record_size))" -gt "$max_bs" ]; then
-        echo 'ERROR: A malicious pax header record attempted to reach outside of the pax header.' >&2
-        exit 1
-      fi
+      header_size="$(echo "${record_header}" | wc -c)"
       skip="$skip_bytes" trim=1 dd_max_read "$record_size" < "$1" | \
         dd bs="$record_size" count=1 iflag=fullblock status=none | \
         skip="$header_size" trim=1 dd_max_read "$((record_size-header_size))"
@@ -467,6 +466,15 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ "$mode" = extract ]; then
+  if [ -w /dev/shm ]; then
+    rmdir "$TMP_DIR"
+    # Use in-memory storage on extraction when available since scratch space
+    # will be very small.
+    TMP_DIR="$(mktemp -d -p /dev/shm)"
+  fi
+  PAXTAR_HEADER="$TMP_DIR/outer_tar"
+  TAR_HEADER="$TMP_DIR/inner_tar"
+  PAX_HEADER="$TMP_DIR/pax_header"
   extract
 else
   # create
