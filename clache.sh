@@ -325,7 +325,7 @@ get_pax_field() {
       [ "$record_size" -le "$max_bs" ] &&
       [ "$record_size" -ge "$((header_size+1))" ] &&
       # minimum pax record is `5 a=\n` which is just key "a" with empty value.
-      [ "$record_size" -gt 5 ] &&
+      [ "$record_size" -ge 5 ] &&
       [ "$((skip_bytes+record_size))" -le "$max_bs" ]
     } 2> /dev/null; then
       echo 'ERROR: A malicious pax header record attempted to reach outside of the pax header.' >&2
