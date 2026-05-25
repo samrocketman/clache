@@ -1,3 +1,23 @@
+# clache v0.8 - May 24, 2026
+
+More robust tar handling surfacing failures as soon as possible.
+
+- `/dev/shm` in-memory file system used, when available, extracting caches.
+- Locale issues removed by using `LC_ALL` where ASCII is required.
+- `ustar` checksum validation ensures header correctness.
+- Sanitize nonoctal characers in ustar size field.
+- End of archive is a little more robust against truncated EOF.
+- More robust inner tar header parsing.
+  - Inner tar header checksum validated.
+  - Inner tar files are unpractically limited to 10TB.
+  - Inner tar has typeflag validation in addition to format validation.
+- More robust pax header parsing using dd for bytes seeking.
+  - pax headers are practically limited to 5MB.
+  - Lots of cross checking when reading pax headers sequentially.
+  - Sanitize nonnumeric characters in pax size field.
+  - pax headers cannot seek outside of the pax header bounds.
+
+
 # clache v0.7 - May 23, 2026
 
 - Echo statements show pax format and root path.
