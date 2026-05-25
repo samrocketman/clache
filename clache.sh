@@ -331,12 +331,12 @@ get_pax_field() {
 paxField() {
   if [ "$1" = size ]; then
     local pax_size
-    pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric)"
+    pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric | sed -E 's/^0+//')"
     if [ "${#pax_size}" -gt 18 ]; then
       echo 'ERROR: pax size header returned greater than an exabyte.' >&2
       exit 1
     fi
-    echo "$pax_size"
+    echo "${pax_size:-}"
   else
     get_pax_field "$PAX_HEADER" "$1" | sanitize_cntrl
   fi
