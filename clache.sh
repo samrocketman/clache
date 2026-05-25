@@ -84,10 +84,12 @@ export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-# clear internally used vars
-export skip trim
+# clear internally used vars and other security vars
+export skip trim file_size_digits_limit
 skip=""
 trim=""
+# an unpractical cache file size limit of 13 digits is ~10TB
+file_size_digits_limit=13
 #
 # FUNCTIONS (see main at the end)
 #
@@ -309,7 +311,7 @@ get_pax_field() {
     # newline included in size intentional (because record should exclude =)
     header_size="$(echo "${record_header}" | wc -c)"
     if ! {
-      [ "${#record_size}" -lt 18 ] &&
+      [ "${#record_size}" -lt "$file_size_digits_limit" ] &&
       [ "$record_size" -le "$max_bs" ] &&
       [ "$record_size" -lt "$((header_size+1))" ] &&
       # minimum pax record is `5 a=\n` which is just key "a" with empty value.
@@ -333,8 +335,8 @@ paxField() {
   if [ "$1" = size ]; then
     local pax_size
     pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric | sed -E 's/^0+//')"
-    if [ "${#pax_size}" -ge 18 ]; then
-      echo 'ERROR: pax size header returned greater than an exabyte.' >&2
+    if [ "${#pax_size}" -ge "$file_size_digits_limit" ]; then
+      echo 'ERROR: pax size header returned greater than 10 terabytes.' >&2
       exit 1
     fi
     echo "${pax_size:-}"
