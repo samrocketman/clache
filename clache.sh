@@ -250,14 +250,20 @@ fileName() {
     pax_path="$(paxField path)"
     if [ -n "${pax_path:-}" ]; then
       name="$pax_path"
-    else
-      name="${name#PaxHeader/}"
     fi
   fi
   echo "$name"
 }
 ustarName() {
-  dd bs=100 count=1 status=none | sanitize_nonascii
+  local name prefix
+  name="$(dd bs=100 count=1 iflag=fullblock status=none | sanitize_nonascii)"
+  dd bs=245 skip=1 count=0 iflag=fullblock status=none
+  prefix="$(dd bs=155 count=1 iflag=fullblock status=none | sanitize_nonascii)"
+  if [ -n "${prefix:-}" ]; then
+    echo "${prefix}/${name:-}"
+  else
+    echo "${name:-}"
+  fi
 }
 fileSize() {
   local file_size pax_size
@@ -511,7 +517,7 @@ else
         archive_command+=( sudo )
       fi
       archive_command+=( tar --format pax -cC / -- "${full_paths[@]}" )
-      echo "${archive_command[*]}"
+      echo "${archive_command[*]}" >&2
       "${archive_command[@]}" > "${largetar_dir}/os-cache.tar"
       cd "${largetar_dir}"
       # same as `tar --format pax -c os-cache.tar` except it does not
@@ -524,7 +530,7 @@ else
   if [ -n "${relative_paths:-}" ]; then
     (
       archive_command=( tar --format pax -c -- "${relative_paths[@]}" )
-      echo "${archive_command[*]}"
+      echo "${archive_command[*]}" >&2
       "${archive_command[@]}" > "${largetar_dir}/pwd-cache.tar"
       cd "${largetar_dir}"
       tar --format pax -c pwd-cache.tar
