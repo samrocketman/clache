@@ -1,3 +1,7 @@
+# clache v0.10 - May 25, 2026
+
+- Bugfix internal function `dd_max_read` so `bs=0` is not possible.
+
 # clache v0.9 - May 25, 2026
 
 - Internal function `dd_max_read` reads only what is necessary.

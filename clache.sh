@@ -371,21 +371,20 @@ dd_max_read() {
   if [ "${skip:-0}" -gt 0 ]; then
     FILE_SIZE="$((FILE_SIZE-skip))"
   fi
-  if [ "${skip:-0}" -gt 0 ]; then
-    if [ "$skip" -gt "$max_bs" ]; then
-      dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0 iflag=fullblock status=none
-      skip="$(( skip%max_bs ))"
-    fi
-    dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
+  if [ "$skip" -gt "$max_bs" ]; then
+    dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0 iflag=fullblock status=none
+    skip="$(( skip%max_bs ))"
   fi
-  if [ "$FILE_SIZE" -lt 1 ]; then
-    return
+  if [ "${skip}" -gt 0 ]; then
+    dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
   fi
   if [ "$FILE_SIZE" -gt "$max_bs" ]; then
     dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
     FILE_SIZE="$(( FILE_SIZE%max_bs ))"
   fi
-  dd bs="$FILE_SIZE" count=1 iflag=fullblock status=none
+  if [ "${FILE_SIZE}" -gt 0 ]; then
+    dd bs="$FILE_SIZE" count=1 iflag=fullblock status=none
+  fi
 }
 readTarFile() {
   local FILE_NAME FILE_SIZE
