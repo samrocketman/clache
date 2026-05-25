@@ -313,7 +313,7 @@ get_pax_field() {
     if ! {
       [ "${#record_size}" -lt "$file_size_digits_limit" ] &&
       [ "$record_size" -le "$max_bs" ] &&
-      [ "$record_size" -lt "$((header_size+1))" ] &&
+      [ "$record_size" -ge "$((header_size+1))" ] &&
       # minimum pax record is `5 a=\n` which is just key "a" with empty value.
       [ "$record_size" -gt 5 ] &&
       [ "$((skip_bytes+record_size))" -le "$max_bs" ]
