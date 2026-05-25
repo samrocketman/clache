@@ -170,7 +170,7 @@ verify_tar_chksum() {
     [ "$tarfile_checksum" -eq "$calculated_checksum" ] &&
     [ "$tarfile_checksum" -gt 0 ] &&
     [ "$calculated_checksum" -gt 0 ]
-  }; then
+  } 2> /dev/null; then
     echo 'ERROR: Tar header checksum invalid.' >&2
     exit 1
   fi
@@ -305,16 +305,23 @@ get_pax_field() {
       echo 'ERROR: invalid characters detected in pax size.' >&2
       exit 1
     fi
-    if [ "$record_size" -gt "$max_bs" ]; then
+    if ! {
+      [ "${#record_size}" -le 18 ] &&
+      [ "$record_size" -le "$max_bs" ]
+    } 2> /dev/null; then
       echo 'ERROR: A malicious pax header record set its size to greater than 5MB.' >&2
       exit 1
     fi
     if [ "$record_name" = "$2" ]; then
       # newline included in size intentional (because record should exclude =)
       header_size="$(echo "${record_size} ${record_name}" | wc -c)"
+      if [ "$((skip_bytes+record_size))" -gt "$max_bs" ]; then
+        echo 'ERROR: A malicious pax header record attempted to reach outside of the pax header.' >&2
+        exit 1
+      fi
       skip="$skip_bytes" trim=1 dd_max_read "$record_size" < "$1" | \
         dd bs="$record_size" count=1 iflag=fullblock status=none | \
-        skip="$header_size" trim=1 dd_max_read "$record_size"
+        skip="$header_size" trim=1 dd_max_read "$((record_size-header_size))"
       break
     fi
     previously_skipped="$skip_bytes"
