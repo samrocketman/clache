@@ -1,6 +1,8 @@
 # clache v0.9
 
 - Internal function `dd_max_read` reads only what is necessary.
+- Added a proposal for cache integrity checking.
+- Fixed ustar bug where `prefix` field was not considered for the file name.
 
 # clache v0.8 - May 24, 2026
 

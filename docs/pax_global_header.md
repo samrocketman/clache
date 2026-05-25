@@ -62,24 +62,24 @@ checksum is not required).
 
 All values can be statically calculated.
 
-| Field Name | offset | length | value                            |
-| ---------- | ------ | ------ | -------------------------------- |
-| name       | 0      | 100    | `pax_global_header` (+nul 83 bs) |
-| mode       | 100    | 8      | `0000666` (+nul)                 |
-| uid        | 108    | 8      | `0000000` (+nul)                 |
-| gid        | 116    | 8      | `0000000` (+nul)                 |
-| size       | 124    | 12     | `00000000237` (+nul)             |
-| mtime      | 136    | 12     | `00000000000` (+nul)             |
-| chksum     | 148    | 8      | `0006413` (+nul)        |
-| typeflag   | 156    | 1      | `g`                              |
-| linkname   | 157    | 100    | (+nul 100 bs)                    |
-| magic      | 257    | 6      | ustar (+nul)                     |
-| version    | 263    | 2      | `00`                             |
-| uname      | 265    | 32     | `root` (+nul 28 bs)              |
-| gname      | 297    | 32     | `root` (+nul 28 bs)              |
-| devmajor   | 329    | 8      | `0000000` (+nul)                 |
-| devminor   | 337    | 8      | `0000000` (+nul)                 |
-| prefix     | 345    | 155    | (+nul 100 bs)                    |
+| Field Name | offset | length | value                                      |
+| ---------- | ------ | ------ | ------------------------------------------ |
+| name       | 0      | 100    | `pax_global_integrity_header` (+nul 73 bs) |
+| mode       | 100    | 8      | `0000666` (+nul)                           |
+| uid        | 108    | 8      | `0000000` (+nul)                           |
+| gid        | 116    | 8      | `0000000` (+nul)                           |
+| size       | 124    | 12     | `00000000237` (+nul)                       |
+| mtime      | 136    | 12     | `00000000000` (+nul)                       |
+| chksum     | 148    | 8      | `0007499` (+nul)                           |
+| typeflag   | 156    | 1      | `g`                                        |
+| linkname   | 157    | 100    | (+nul 100 bs)                              |
+| magic      | 257    | 6      | ustar (+nul)                               |
+| version    | 263    | 2      | `00`                                       |
+| uname      | 265    | 32     | `root` (+nul 28 bs)                        |
+| gname      | 297    | 32     | `root` (+nul 28 bs)                        |
+| devmajor   | 329    | 8      | `0000000` (+nul)                           |
+| devminor   | 337    | 8      | `0000000` (+nul)                           |
+| prefix     | 345    | 155    | (+nul 100 bs)                              |
 
 The following script writes the static header and pre-calculates its octal
 `chksum`.  The calculated octal result is 6413.
@@ -87,8 +87,8 @@ The following script writes the static header and pre-calculates its octal
 ```bash
 {
 # name (100 bs)
-echo -n 'pax_global_header'
-dd if=/dev/zero bs=83 count=1 iflag=fullblock status=none
+echo -n 'pax_global_integrity_header'
+dd if=/dev/zero bs=73 count=1 iflag=fullblock status=none
 # mode (8 bs)
 echo -n '0000666'
 dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
@@ -104,7 +104,7 @@ dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
 # mtime (12 bs)
 echo -n '00000000000'
 dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
-# chksum tbd (8 bs); results in: echo -n '0006413'
+# chksum tbd (8 bs); results in: echo -n '0007499'
 echo -n '       '
 dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
 # typeflag (1 b)
@@ -132,7 +132,7 @@ dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
 dd if=/dev/zero bs=155 count=1 iflag=fullblock status=none
 # 512-500 bs 512-byte block padding
 dd if=/dev/zero bs=12 count=1 iflag=fullblock status=none
-}  | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
+} | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
 ```
 
 ## Integrity Data
