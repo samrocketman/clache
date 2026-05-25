@@ -306,9 +306,12 @@ get_pax_field() {
       echo 'ERROR: invalid characters detected in pax size.' >&2
       exit 1
     fi
+    # newline included in size intentional (because record should exclude =)
+    header_size="$(echo "${record_header}" | wc -c)"
     if ! {
-      [ "${#record_size}" -le 18 ] &&
+      [ "${#record_size}" -lt 18 ] &&
       [ "$record_size" -le "$max_bs" ] &&
+      [ "$record_size" -lt "$((header_size+1))" ] &&
       # minimum pax record is `5 a=\n` which is just key "a" with empty value.
       [ "$record_size" -gt 5 ] &&
       [ "$((skip_bytes+record_size))" -le "$max_bs" ]
@@ -317,8 +320,6 @@ get_pax_field() {
       exit 1
     fi
     if [ "$record_name" = "$2" ]; then
-      # newline included in size intentional (because record should exclude =)
-      header_size="$(echo "${record_header}" | wc -c)"
       skip="$skip_bytes" trim=1 dd_max_read "$record_size" < "$1" | \
         dd bs="$record_size" count=1 iflag=fullblock status=none | \
         skip="$header_size" trim=1 dd_max_read "$((record_size-header_size))"
@@ -332,7 +333,7 @@ paxField() {
   if [ "$1" = size ]; then
     local pax_size
     pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric | sed -E 's/^0+//')"
-    if [ "${#pax_size}" -gt 18 ]; then
+    if [ "${#pax_size}" -ge 18 ]; then
       echo 'ERROR: pax size header returned greater than an exabyte.' >&2
       exit 1
     fi
