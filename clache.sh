@@ -84,6 +84,10 @@ export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
+dd() {
+  command dd iflag=fullblock status=none "$@"
+}
+
 # clear internally used vars and other security vars
 export skip trim file_size_digits_limit
 skip=""
@@ -140,27 +144,27 @@ sanitize_cntrl() {
   LC_ALL=C tr -d '[:cntrl:]\0'
 }
 isBlockZeros() {
-  local block="$(dd bs=512 count=1 status=none | bin_to_hex | sed -E 's/^0+/0/')"
+  local block="$(dd bs=512 count=1 | bin_to_hex | sed -E 's/^0+/0/')"
   [ -n "${block:-}" ] && [ "$block" = 0 ]
 }
 getTarFormat() {
-  dd if="$1" bs=1 count=6 skip=257 status=none | sanitize_nonascii
+  dd if="$1" bs=1 count=6 skip=257 | sanitize_nonascii
 }
 getTarTypeflag() {
-  dd if="$1" bs=1 count=1 skip=156 status=none | sanitize_nonascii | tr -d ' '
+  dd if="$1" bs=1 count=1 skip=156 | sanitize_nonascii | tr -d ' '
 }
 verify_tar_chksum() {
   local calculated_checksum tarfile_checksum
   calculated_checksum="$(
     {
-      dd if="$1" bs=148 count=1 iflag=fullblock status=none
+      dd if="$1" bs=148 count=1
       echo -n '        '
-      dd if="$1" skip=156 bs=1 count=356 iflag=fullblock status=none
+      dd if="$1" skip=156 bs=1 count=356
     } | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
   )"
   calculated_checksum="$(printf '%o\n' "$calculated_checksum")"
   tarfile_checksum="$(
-    dd if="$1" skip=148 bs=1 count=8 status=none | \
+    dd if="$1" skip=148 bs=1 count=8 | \
       sanitize_nonoctal | \
       sed 's/^[ 0]*//' | \
       xargs
@@ -177,9 +181,9 @@ verify_tar_chksum() {
 }
 determineTarFormat() {
   local typeflag
-  dd bs=512 count=1 status=none > "$TAR_HEADER"
+  dd bs=512 count=1 > "$TAR_HEADER"
   if isBlockZeros < "$TAR_HEADER"; then
-    if ! { dd bs=512 count=1 status=none | isBlockZeros; }; then
+    if ! { dd bs=512 count=1 | isBlockZeros; }; then
       echo 'ERROR: archive is likely corrupt.  End of archive not determined.' >&2
       exit 1
     fi
@@ -228,7 +232,7 @@ readTarHeader() {
   else
     dd_max_read "$header_size" | trim=1 dd_max_read "$header_size" > "$PAX_HEADER"
   fi
-  dd bs=512 count=1 status=none > "$TAR_HEADER"
+  dd bs=512 count=1 > "$TAR_HEADER"
   verify_tar_chksum "$TAR_HEADER"
   if [ ! "$(getTarFormat "$TAR_HEADER")" = ustar ]; then
     echo 'ERROR: inner tar is not expected format.' >&2
@@ -256,9 +260,9 @@ fileName() {
 }
 ustarName() {
   local name prefix
-  name="$(dd bs=100 count=1 iflag=fullblock status=none | sanitize_nonascii)"
-  dd bs=245 skip=1 count=0 iflag=fullblock status=none
-  prefix="$(dd bs=155 count=1 iflag=fullblock status=none | sanitize_nonascii)"
+  name="$(dd bs=100 count=1 | sanitize_nonascii)"
+  dd bs=245 skip=1 count=0
+  prefix="$(dd bs=155 count=1 | sanitize_nonascii)"
   if [ -n "${prefix:-}" ]; then
     echo "${prefix}/${name:-}"
   else
@@ -283,7 +287,7 @@ fileSize() {
 }
 ustarSize() {
   local size
-  size="$(dd bs=1 skip=124 count=12 status=none | sanitize_nonoctal)"
+  size="$(dd bs=1 skip=124 count=12 | sanitize_nonoctal)"
   # ustar size can be zero or space padded
   size="$( echo "$size" | awk '{gsub("^[ 0]+", "", $0); print; }' )"
   # convert octal to decimal
@@ -372,18 +376,18 @@ dd_max_read() {
     FILE_SIZE="$((FILE_SIZE-skip))"
   fi
   if [ "$skip" -gt "$max_bs" ]; then
-    dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0 iflag=fullblock status=none
+    dd bs="$max_bs" skip="$(( skip/max_bs ))" count=0
     skip="$(( skip%max_bs ))"
   fi
   if [ "${skip}" -gt 0 ]; then
-    dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
+    dd bs="$skip" skip=1 count=0
   fi
   if [ "$FILE_SIZE" -gt "$max_bs" ]; then
-    dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
+    dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))"
     FILE_SIZE="$(( FILE_SIZE%max_bs ))"
   fi
   if [ "${FILE_SIZE}" -gt 0 ]; then
-    dd bs="$FILE_SIZE" count=1 iflag=fullblock status=none
+    dd bs="$FILE_SIZE" count=1
   fi
 }
 readTarFile() {
@@ -409,15 +413,10 @@ readTarFile() {
       echo "tar -xf $FILE_NAME" >&2
       dd_max_read "$FILE_SIZE" status=none | tar -x
       ;;
-#    *.tar)
-#      echo "$FILE_NAME is $FILE_SIZE bytes" >&2
-#      echo -n 'Number of tar entries: '
-#      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none | tar -t | wc -l
-#      ;;
     *)
       # skip processing
-      echo "Skipping $FILE_NAME; seeking $FILE_SIZE bytes" >&2
-      dd bs=512 count="$((( FILE_SIZE+511 )/512))" status=none of=/dev/null
+      echo "Skipping unrecognized file; seeking $FILE_SIZE bytes" >&2
+      dd bs=512 count="$((( FILE_SIZE+511 )/512))" of=/dev/null
       ;;
   esac
 }
@@ -435,11 +434,10 @@ outer_tar_prefix() (
   # than requiring double the space for creating the cache.
   set +o pipefail
   tar --format pax -c "$1" 2>/dev/null | {
-    dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header"
-    header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
-    header_blocks="$(( (header_size + 511 ) / 512))"
-    dd bs=512 count="$header_blocks" status=none > "$TMP_DIR/prefix_header_body"
-    dd bs=512 count=1 status=none > "$TMP_DIR/prefix_header_file"
+    dd bs=512 count=1 > "$TMP_DIR/prefix_header"
+    header_size="$()"
+    dd_max_read "$(ustarSize < "$TMP_DIR/prefix_header")" > "$TMP_DIR/prefix_header_body"
+    dd bs=512 count=1 > "$TMP_DIR/prefix_header_file"
     # create tar prefix
     cat "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file"
   }
