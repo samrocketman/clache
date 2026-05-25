@@ -86,6 +86,11 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 PAXTAR_HEADER="$TMP_DIR/outer_tar"
 TAR_HEADER="$TMP_DIR/inner_tar"
 PAX_HEADER="$TMP_DIR/pax_header"
+
+# clear internally used vars
+export skip trim
+skip=""
+trim=""
 #
 # FUNCTIONS (see main at the end)
 #
@@ -278,45 +283,40 @@ ustarSize() {
   # convert octal to decimal
   printf '%d\n' "0${size}"
 }
-paxFieldAwkScript() {
-cat<<'EOF'
-BEGIN {
-  cont=0
-}
-{
-  current_line=length($0)+1
-}
-cont > 0 {
-  # complex pax header continued
-  cont=cont+current_line
-  headers[name]=headers[name]$0"\n"
-  if(cont >= size[name]) {
-    cont=0
-  }
-  next
-}
-{
-  record=substr($0, length($1)+2)
-  name=record
-  gsub(/=.*$/, "", name)
-  value=substr(record, length(name)+2)
-  headers[name]=value"\n"
-  size[name]=$1
-  if($1 == current_line) {
-    # simple pax header
-    next
-  }
-}
-{
-  cont=current_line
-}
-END {
-  printf("%s", headers[field])
-}
-EOF
-}
+get_pax_field() (
+  set +o pipefail
+  # 5MB is max
+  max_bs=5242880
+  skip_bytes=0
+  previously_skipped=-1
+  until [ "$skip_bytes" -eq "$previously_skipped" ]; do
+    record_header="$(
+      skip="$skip_bytes" trim=1 dd_max_read $max_bs < "$1" | \
+      awk '{gsub(/=.*$/, "", $0);print;exit}'
+    )"
+    if [ -z "${record_header:-}" ]; then
+      break
+    fi
+    record_name="${record_header#* }"
+    record_size="$(sanitize_nonnumeric <<< "${record_header% *}")"
+    if [ ! "$record_size" = "$(awk '{print $1}' <<< "${record_header}")" ]; then
+      echo 'ERROR: invalid characters detected in pax size.' >&2
+      exit 1
+    fi
+    if [ "$record_name" = "$2" ]; then
+      # newline included in size intentional (because record should exclude =)
+      header_size="$(echo "${record_size} ${record_name}" | wc -c)"
+      skip="$skip_bytes" trim=1 dd_max_read "$record_size" < "$1" | \
+        dd bs="$record_size" count=1 iflag=fullblock status=none | \
+        skip="$header_size" trim=1 dd_max_read "$record_size"
+      break
+    fi
+    previously_skipped="$skip_bytes"
+    skip_bytes="$((skip_bytes + record_size))"
+  done
+)
 paxField() {
-  < "$PAX_HEADER" awk -v field="$1" "$(paxFieldAwkScript)" | sanitize_cntrl
+  get_pax_field "$PAX_HEADER" "$1" | sanitize_cntrl
 }
 dd_max_read() {
   local FILE_SIZE max_bs remainder
@@ -329,6 +329,9 @@ dd_max_read() {
     FILE_SIZE="$(( ((FILE_SIZE+511)/512)*512 ))"
   fi
   remainder="$(( FILE_SIZE%max_bs ))"
+  if [ "${skip:-0}" -gt 0 ]; then
+    dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
+  fi
   dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
   if [ "$remainder" -gt 0 ]; then
     dd bs="$remainder" count=1 iflag=fullblock status=none
