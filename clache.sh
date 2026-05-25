@@ -283,14 +283,16 @@ ustarSize() {
   # convert octal to decimal
   printf '%d\n' "0${size}"
 }
-get_pax_field() (
-  set +o pipefail
+get_pax_field() {
+  local max_bs skip_bytes previously_skipped
+  local record_header record_name record_size header_size
   # 5MB is max
   max_bs=5242880
   skip_bytes=0
   previously_skipped=-1
   until [ "$skip_bytes" -eq "$previously_skipped" ]; do
     record_header="$(
+      set +o pipefail
       skip="$skip_bytes" trim=1 dd_max_read $max_bs < "$1" | \
       awk '{gsub(/=.*$/, "", $0);print;exit}'
     )"
@@ -301,6 +303,10 @@ get_pax_field() (
     record_size="$(sanitize_nonnumeric <<< "${record_header% *}")"
     if [ ! "$record_size" = "$(awk '{print $1}' <<< "${record_header}")" ]; then
       echo 'ERROR: invalid characters detected in pax size.' >&2
+      exit 1
+    fi
+    if [ "$record_size" -gt "$max_bs" ]; then
+      echo 'ERROR: A malicious pax header record set its size to greater than 5MB.' >&2
       exit 1
     fi
     if [ "$record_name" = "$2" ]; then
@@ -314,7 +320,7 @@ get_pax_field() (
     previously_skipped="$skip_bytes"
     skip_bytes="$((skip_bytes + record_size))"
   done
-)
+}
 paxField() {
   get_pax_field "$PAX_HEADER" "$1" | sanitize_cntrl
 }
