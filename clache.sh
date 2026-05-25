@@ -335,6 +335,9 @@ get_pax_field() {
     fi
     previously_skipped="$skip_bytes"
     skip_bytes="$((skip_bytes + record_size))"
+    if [ "$skip_bytes" -ge "$max_bs" ]; then
+      break
+    fi
   done
 }
 paxField() {
@@ -374,6 +377,9 @@ dd_max_read() {
       skip="$(( skip%max_bs ))"
     fi
     dd bs="$skip" skip=1 count=0 iflag=fullblock status=none
+  fi
+  if [ "$FILE_SIZE" -lt 1 ]; then
+    return
   fi
   if [ "$FILE_SIZE" -gt "$max_bs" ]; then
     dd bs="$max_bs" count="$(( FILE_SIZE/max_bs ))" iflag=fullblock status=none
