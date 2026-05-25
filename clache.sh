@@ -1,5 +1,5 @@
 #!/bin/bash
-# clache v0.8
+# clache v0.9
 # Copyright (c) 2026 Sam Gleske https://github.com/samrocketman/clache
 # MIT Licensed
 # Initially Created Sat May 16 05:58:44 EDT 2026
