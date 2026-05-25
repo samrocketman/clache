@@ -261,7 +261,7 @@ fileSize() {
   local file_size pax_size
   file_size="$(ustarSize < "$TAR_HEADER")"
   if [ "$tar_format" = pax ]; then
-    pax_size="$(paxField size | sanitize_nonnumeric)"
+    pax_size="$(paxField size)"
     if [ -n "${pax_size:-}" ]; then
       # inverted logic to account for malformed expression errors
       if ! [ "$pax_size" -ge 0 ]; then
@@ -329,7 +329,17 @@ get_pax_field() {
   done
 }
 paxField() {
-  get_pax_field "$PAX_HEADER" "$1" | sanitize_cntrl
+  if [ "$1" = size ]; then
+    local pax_size
+    pax_size="$(get_pax_field "$PAX_HEADER" "$1" | sanitize_nonnumeric)"
+    if [ "${#pax_size}" -gt 18 ]; then
+      echo 'ERROR: pax size header returned greater than an exabyte.' >&2
+      exit 1
+    fi
+    echo "$pax_size"
+  else
+    get_pax_field "$PAX_HEADER" "$1" | sanitize_cntrl
+  fi
 }
 dd_max_read() {
   local FILE_SIZE max_bs remainder
