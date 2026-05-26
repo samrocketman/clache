@@ -141,7 +141,8 @@ sanitize_nonascii() {
   LC_ALL=C tr -dc '[:print:]'
 }
 sanitize_cntrl() {
-  LC_ALL=C tr -d '[:cntrl:]\0'
+  LC_ALL=C tr -d '[:cntrl:]\0' | \
+  LC_ALL=C sed -E $'s/\xc2[\x80-\x9f]|\xe2\x80[\x8b-\x8f\xa8-\xae]|\xe2\x81[\xa6-\xa9]|\xef\xbb\xbf//g'
 }
 isBlockZeros() {
   local block
