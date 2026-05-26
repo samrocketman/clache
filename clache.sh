@@ -553,18 +553,28 @@ outer_tar_prefix() (
   set +o pipefail
   tar --format pax -c "$1" 2>/dev/null | {
     dd bs=512 count=1 > "$TMP_DIR/prefix_header"
-    header_size="$()"
-    dd_max_read "$(ustarSize < "$TMP_DIR/prefix_header")" > "$TMP_DIR/prefix_header_body"
-    dd bs=512 count=1 > "$TMP_DIR/prefix_header_file"
-    prefix_files=()
+    pax_header_size=0
+    if [ "$(getTarTypeflag "$TMP_DIR/prefix_header")" = x ]; then
+      pax_header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
+      dd_max_read "$pax_header_size" > "$TMP_DIR/prefix_header_body"
+      dd bs=512 count=1 > "$TMP_DIR/prefix_header_file"
+    fi
     if [ "${enforce_integrity}" = true ]; then
-      file_checksum="$(checksum_data "$1")"
-      pax_checksum="$(checksum_data "$TMP_DIR/prefix_header_body")"
-      pax_global_integrity_header "$pax_checksum" "$file_checksum" > "$TMP_DIR/global_header"
       prefix_files+=( "$TMP_DIR/global_header" )
+      file_checksum="$(checksum_data "$1")"
+      if [ "$pax_header_size" -gt 0 ]; then
+        pax_checksum="$(trim=1 dd_max_read "$pax_header_size" < "$TMP_DIR/prefix_header_body" | checksum_data -)"
+      else
+        # no checksum because no pax header (64 zeros)
+        pax_checksum="$(printf '%#064o' 0)"
+      fi
+      pax_global_integrity_header "$pax_checksum" "$file_checksum" > "$TMP_DIR/global_header"
       echo "pax global header size: $(LC_ALL=C wc -c < "$TMP_DIR/global_header")" >&2
     fi
-    prefix_files+=( "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file" )
+    prefix_files+=( "$TMP_DIR/prefix_header" )
+    if [ "$pax_header_size" -gt 0 ]; then
+      prefix_files+=( "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file" )
+    fi
     # create tar prefix
     cat "${prefix_files[@]}"
   }
