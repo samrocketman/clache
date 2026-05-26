@@ -280,6 +280,18 @@ readTarHeader() {
     echo 'ERROR: unexpected inner tar typeflag detected.' >&2
     exit 1
   fi
+  if [ "${enforce_integrity}" = true ]; then
+    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" pax_sha256)"
+    if [ -z "${checksum:-}" ]; then
+      echo 'ERROR: cache integrity is enabled but no pax header checksum available.' >&2
+      exit 1
+    fi
+    echo "${checksum}  -" > "${TMP_DIR}/checksum"
+    if ! checksum_data -c "${TMP_DIR}/checksum" < "$PAX_HEADER" > /dev/null; then
+      echo 'ERROR: aborted because pax file header checksum failed.' >&2
+      exit 1
+    fi
+  fi
 }
 fileName() {
   local name pax_path
@@ -336,6 +348,9 @@ stat_file_size() {
   "${stat_cmd[@]}" "$1"
 }
 get_pax_field() {
+  if [ ! -f "$1" ]; then
+    return
+  fi
   local max_bs skip_bytes previously_skipped record_header record_name
   local record_size header_size pax_record_limit pax_records
   max_bs="$(stat_file_size "$1")"
