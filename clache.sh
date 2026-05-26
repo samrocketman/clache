@@ -146,8 +146,12 @@ sanitize_cntrl() {
 }
 isBlockZeros() {
   local block
-  block="$(dd bs=512 count=1 | bin_to_hex | sed -E 's/^0+/0/')"
-  [ -n "${block:-}" ] && [ "$block" = 0 ]
+  block="$(dd bs=512 count=1 | bin_to_hex)"
+  if [ ! "${#block}" = 1024 ]; then
+    echo 'ERROR: End of tar check could not read a full 512-byte block.' >&2
+    exit 1
+  fi
+  grep -E '^0+$' <<< "$block" > /dev/null
 }
 getTarFormat() {
   dd if="$1" bs=1 count=6 skip=257 | sanitize_nonascii

@@ -1,3 +1,9 @@
+# clache v0.11
+
+Bugs fixed:
+
+- End of archive could hide corruption or a truncated archive with partial read.
+
 # clache v0.10 - May 25, 2026
 
 Bugs fixed:
