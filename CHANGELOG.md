@@ -1,8 +1,14 @@
 # clache v0.10 - May 25, 2026
 
-- Bugfix internal function `dd_max_read` so `bs=0` is not possible.
-- Bugfix desynchronized parser bug where dd may not fully read the block data.
-- Bugfix hang on too many pax records.  Pax record limit is now 1000.
+Bugs fixed:
+
+- Internal function `dd_max_read` fixes so `bs=0` is not possible.
+- Fixed desynchronized parser bug where dd may not fully read the block data.
+
+Security issues fixed:
+
+- Fix hang on too many pax records.  Pax record limit is now 1000.
+- UTF-8 control characters are now stripped in sanitizing logic.
 
 # clache v0.9 - May 25, 2026
 
