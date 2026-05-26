@@ -123,6 +123,11 @@ OPTIONS
     intermediate tar file can be significantly larger than available /tmp file
     space.  Default: /tmp mktemp directory.
 
+  -s, --verify-checksum
+    Protects cache against corruption. For both creation or extraction,
+    archives created with this option will have checksum header data.  xxhsum
+    will be used for checksums if available else fall back to sha256.
+
   --help, -h
     Show help.
 EOF
@@ -690,7 +695,7 @@ while [ "$#" -gt 0 ]; do
       largetar_dir="$(canonical_path "${largetar_dir}")"
       shift
       ;;
-    -s|--verify-checksums)
+    -s|--verify-checksum)
       enforce_integrity=true
       shift
       ;;
