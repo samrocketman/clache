@@ -80,7 +80,7 @@ if [ "$failed_preflight" = true ]; then
 fi
 
 set -euo pipefail
-export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
+export tar_format TAR_HEADER PAX_HEADER PAX_GLOBAL_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -207,6 +207,28 @@ determineTarFormat() {
     exit 1
   fi
   typeflag="$(getTarTypeflag "$TAR_HEADER")"
+  if [ "${typeflag}" = g ]; then
+    local header_size
+    header_size="$(ustarSize < "$TAR_HEADER")"
+    if [ "$header_size" -gt 5242880 ]; then
+      echo 'ERROR: aborted because global pax header size is greater than 5MB.' >&2
+      exit 1
+    elif [ "$header_size" -lt 1 ]; then
+      echo 'ERROR: aborted because global pax header size is less than 1 byte.' >&2
+      exit 1
+    fi
+    dd_max_read "$header_size" | trim=1 dd_max_read "$header_size" > "$PAX_GLOBAL_HEADER"
+
+    # continue on with pax detection and re-initialze values
+    dd bs=512 count=1 > "$TAR_HEADER"
+    tar_format="$(getTarFormat "$TAR_HEADER")"
+    if [ ! "${tar_format}" = ustar ]; then
+      echo 'ERROR: could not determine supported tar format; only ustar and pax(ustar) supported' >&2
+      exit 1
+    fi
+    verify_tar_chksum "$TAR_HEADER"
+    typeflag="$(getTarTypeflag "$TAR_HEADER")"
+  fi
   if [ "${typeflag}" = x ]; then
     if [ ! "$tar_format" = ustar ]; then
       echo "ERROR: Only pax ustar format is supported.  Found format '${tar_format}'." >&2
@@ -305,10 +327,18 @@ ustarSize() {
   # convert octal to decimal
   printf '%d\n' "0${size}"
 }
+stat_file_size() {
+  local stat_cmd
+  case "$(uname -s)" in
+    Darwin|*BSD) stat_cmd=(stat -f %z) ;;
+    *) stat_cmd=(stat -c %s) ;;
+  esac
+  "${stat_cmd[@]}" "$1"
+}
 get_pax_field() {
   local max_bs skip_bytes previously_skipped record_header record_name
   local record_size header_size pax_record_limit pax_records
-  max_bs="$(ustarSize < "$PAXTAR_HEADER")"
+  max_bs="$(stat_file_size "$1")"
   skip_bytes=0
   previously_skipped=-1
   pax_record_limit=1000
@@ -611,6 +641,7 @@ if [ "$mode" = extract ]; then
   PAXTAR_HEADER="$TMP_DIR/outer_tar"
   TAR_HEADER="$TMP_DIR/inner_tar"
   PAX_HEADER="$TMP_DIR/pax_header"
+  PAX_GLOBAL_HEADER="$TMP_DIR/global_pax_header"
   extract
 else
   # create
