@@ -124,9 +124,21 @@ OPTIONS
     space.  Default: /tmp mktemp directory.
 
   -s, --verify-checksum
-    Protects cache against corruption. For both creation or extraction,
-    archives created with this option will have checksum header data.  xxhsum
-    will be used for checksums if available else fall back to sha256.
+    Protects cache against corruption. Header and archive data checksums are
+    calculated and verified.  This option works for creation or extraction.
+
+  -a SIZE, --sha SIZE
+    Choose the shasum SIZE (1 or 256) to use for archive integrity.
+    Default: 1
+
+  -H SIZE, --xxh SIZE
+    Choose the xxh SIZE (0, 1, 2, or 3 supported) to use for archive integrity.
+    Default: 1
+
+  --no-detect
+    If an archive was created with --verify-checksum, this disables the
+    autodetection which skips the integrity checks for archives that would
+    normally verify checksums.
 
   --help, -h
     Show help.
@@ -214,6 +226,9 @@ determineTarFormat() {
   typeflag="$(getTarTypeflag "$TAR_HEADER")"
   if [ "${typeflag}" = g ]; then
     local header_size
+    if [ "${disable_integrity_detection}" = false ]; then
+      enforce_integrity=true
+    fi
     header_size="$(ustarSize < "$TAR_HEADER")"
     if [ "$header_size" -gt 5242880 ]; then
       echo 'ERROR: aborted because global pax header size is greater than 5MB.' >&2
@@ -474,7 +489,7 @@ extract_or_enforce_checksum() {
       exit 1
     fi
     echo "${checksum}" > "$TMP_DIR/checksum"
-    tee >(echo "archive checksum$(checksum_with_file_status)" >&2) | "$@"
+    tee >(echo "${FILE_NAME:-archive} checksum$(checksum_with_file_status)" >&2) | "$@"
     if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
     fi
@@ -520,17 +535,26 @@ extract() {
 }
 checksum_data() {
   if [ "${1:-}" = '-c' ]; then
-    if [ "$(dd if="$2" bs=5 count=1)" = 'XXH3_' ]; then
-      xxhsum -H3 "$@" | sed 's/stdin/-/'
-    else
-      shasum -a 256 "$@"
-    fi
+    case "$(stat_file_size "$2")" in
+      68) shasum -a 256 "$@" ;;
+      44) shasum -a 1 "$@" ;;
+      40) xxhsum -H2 "$@" | sed 's/stdin/-/' ;;
+      29) xxhsum -H3 "$@" | sed 's/stdin/-/' ;;
+      24) xxhsum -H1 "$@" | sed 's/stdin/-/' ;;
+      16) xxhsum -H0 "$@" | sed 's/stdin/-/' ;;
+      *)
+        echo 'ERROR: unknown checksum data detected.' >&2
+        exit 1
+    esac
   else
-    if type -P xxhsum > /dev/null; then
-      xxhsum -H3 "$@"
-    else
-      shasum -a 256 "$@" | head -c64
-    fi
+    case "$sum_util" in
+      xxhsum)
+        xxhsum -H"$xxh_size" "$@"
+        ;;
+      shasum)
+        shasum -a "$sha_size" "$@"
+        ;;
+    esac
   fi
 }
 create_pax_headers() {
@@ -633,11 +657,16 @@ outer_tar_prefix() (
       if [ "$pax_header_size" -gt 0 ]; then
         pax_checksum="$(trim=1 dd_max_read "$pax_header_size" < "$TMP_DIR/prefix_header_body" | checksum_data -)"
       else
-        # no checksum because no pax header (64 zeros)
-        pax_checksum="$(printf '%#064o' 0)"
+        # no checksum because no pax header
+        pax_checksum="0"
       fi
       pax_global_integrity_header "$pax_checksum" "$file_checksum" > "$TMP_DIR/global_header"
-      echo "pax global header size: $(LC_ALL=C wc -c < "$TMP_DIR/global_header")" >&2
+      local global_header_bs
+      global_header_bs="$(stat_file_size "$TMP_DIR/global_header")"
+      if [ ! "$global_header_bs" = 1024 ]; then
+        echo "ERROR: pax global header size (expected 1024): $global_header_bs" >&2
+        exit 1
+      fi
     fi
     prefix_files+=( "$TMP_DIR/prefix_header" )
     if [ "$pax_header_size" -gt 0 ]; then
@@ -663,6 +692,13 @@ relative_paths=()
 nosudo=false
 largetar_dir="${TMP_DIR}"
 enforce_integrity=false
+xxh_size=1
+sha_size=1
+sum_util=shasum
+disable_integrity_detection=false
+if type -P xxhsum > /dev/null; then
+  sum_util=xxhsum
+fi
 export largetar_dir nosudo enforce_integrity
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -697,6 +733,34 @@ while [ "$#" -gt 0 ]; do
       ;;
     -s|--verify-checksum)
       enforce_integrity=true
+      shift
+      ;;
+    -H|--xxh)
+      if ! grep '^[0-3]$' <<< "$2" > /dev/null; then
+        echo 'ERROR: --xxh 0-3 supported.' >&2
+        exit 1
+      fi
+      sum_util=xxhsum
+      enforce_integrity=true
+      xxh_size="$2"
+      shift
+      shift
+      ;;
+    -a|--sha)
+      if {
+        [ ! "$2" = 1 ] && [ ! "$2" = 256 ]
+      }; then
+        echo 'ERROR: --sha 1 or --sha 256 supported.' >&2
+        exit 1
+      fi
+      sum_util=shasum
+      enforce_integrity=true
+      sha_size="$2"
+      shift
+      shift
+      ;;
+    --no-detect)
+      disable_integrity_detection=true
       shift
       ;;
     /*)

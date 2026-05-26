@@ -1,12 +1,11 @@
 # clache v0.11
 
-New feature:
-
-- Archive integrity validation (`xxhsum` if available or sha256)
-
-Bugs fixed:
-
-- End of archive could hide corruption or a truncated archive with partial read.
+- Archive integrity validation support.  Detects cache corruption.
+  - Auto-detection on extraction with an to skip detection with `--no-detect`.
+  - `xxhsum` is default falling back to `shasum` if not available.
+  - Force `shasum` and choose level with `--sha [1|256]`.
+  - Force `xxhsum` and choose level with `--xxh [0|1|2|3]`.
+- Bugfix: End of archive could hide corruption or a truncated archive with partial read.
 
 # clache v0.10 - May 25, 2026
 
