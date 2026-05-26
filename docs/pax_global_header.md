@@ -82,7 +82,7 @@ All values can be statically calculated.
 | prefix     | 345    | 155    | (+nul 100 bs)                              |
 
 The following script writes the static header and pre-calculates its octal
-`chksum`.  The calculated octal result is 6413.
+`chksum`.  The calculated octal result is in this example is 7499.
 
 ```bash
 {
@@ -105,8 +105,7 @@ dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
 echo -n '00000000000'
 dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
 # chksum tbd (8 bs); results in: echo -n '0007499'
-echo -n '       '
-dd if=/dev/zero bs=1 count=1 iflag=fullblock status=none
+echo -n '        '
 # typeflag (1 b)
 echo -n 'g'
 # linkname (100 bs)
@@ -153,7 +152,7 @@ Pre-computed data and blocks:
 
 - The header is always 159 bytes (octal `237`).
 - 512-byte block nul padding is always 353 bytes.
-- Pax header checksum is always octal 6413.
+- Pax header checksum is always octal 7499.
 
 ## Calculating checksum on the fly
 

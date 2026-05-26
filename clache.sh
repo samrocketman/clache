@@ -84,19 +84,19 @@ export tar_format TAR_HEADER PAX_HEADER TMP_DIR INNER_PAX_TAR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-dd() {
-  command dd iflag=fullblock status=none "$@"
-}
-
 # clear internally used vars and other security vars
 export skip trim file_size_digits_limit
 skip=""
 trim=""
 # an unpractical cache file size limit of 13 digits is ~10TB
 file_size_digits_limit=13
+
 #
 # FUNCTIONS (see main at the end)
 #
+dd() {
+  command dd iflag=fullblock status=none "$@"
+}
 helptext() {
 cat >&2 <<EOF
 ${0##*/} [--nosudo] --extract < tar-to-extract.tar
@@ -159,8 +159,8 @@ getTarFormat() {
 getTarTypeflag() {
   dd if="$1" bs=1 count=1 skip=156 | sanitize_nonascii | tr -d ' '
 }
-verify_tar_chksum() {
-  local calculated_checksum tarfile_checksum
+create_tar_header_chksum() {
+  local calculated_checksum
   calculated_checksum="$(
     {
       dd if="$1" bs=148 count=1
@@ -168,7 +168,11 @@ verify_tar_chksum() {
       dd if="$1" skip=156 bs=1 count=356
     } | od -v -A n -t u1 | xargs | tr ' ' '+' | bc
   )"
-  calculated_checksum="$(printf '%o\n' "$calculated_checksum")"
+  printf '%08o' "$calculated_checksum"
+}
+verify_tar_chksum() {
+  local calculated_checksum tarfile_checksum
+  calculated_checksum="$(create_tar_header_chksum "$1" | sed 's/^0*//')"
   tarfile_checksum="$(
     dd if="$1" skip=148 bs=1 count=8 | \
       sanitize_nonoctal | \
@@ -210,7 +214,9 @@ determineTarFormat() {
     fi
     tar_format='pax'
     mv "$TAR_HEADER" "$PAXTAR_HEADER"
-  elif [ -z "${typeflag:-}" ] || [ "${typeflag}" = 0 ]; then
+  elif {
+    [ -z "${typeflag:-}" ] || [ -n "$(sanitize_nonoctal <<< "$typeflag")" ]
+  }; then
     tar_format=ustar
   elif [ "${typeflag}" = g ]; then
     echo "ERROR: Only pax typeflag 'x' is supported.  Found typeflag 'g'." >&2
@@ -441,6 +447,73 @@ extract() {
     true
   done
 }
+checksum_data() {
+  shasum -a 256 "$@" | head -c64
+}
+pax_global_integrity_header() {
+  # pax global header with pre-computed data and blocks for integrity checks:
+  #  - The header is always 159 bytes (octal `237`).
+  #  - 512-byte block nul padding is always 353 bytes.
+  #  - Pax header checksum is always octal 7499.
+  {
+    # name (100 bs)
+    echo -n 'pax_global_integrity_header'
+    dd if=/dev/zero bs=73 count=1
+    # mode (8 bs)
+    echo -n '0000666'
+    dd if=/dev/zero bs=1 count=1
+    # uid (8 bs)
+    echo -n '0000000'
+    dd if=/dev/zero bs=1 count=1
+    # gid (8 bs)
+    echo -n '0000000'
+    dd if=/dev/zero bs=1 count=1
+    # size (12 bs)
+    echo -n '00000000237'
+    dd if=/dev/zero bs=1 count=1
+    # mtime (12 bs)
+    printf '%o' "$(date +%s)" | head -c11
+    dd if=/dev/zero bs=1 count=1
+    # chksum tbd (8 bs)
+    echo -n '        '
+    # typeflag (1 b)
+    echo -n 'g'
+    # linkname (100 bs)
+    dd if=/dev/zero bs=100 count=1
+    # magic (6 bs)
+    echo -n 'ustar'
+    dd if=/dev/zero bs=1 count=1
+    # version (2 bs)
+    echo -n '00'
+    # uname (32 bs)
+    echo -n 'root'
+    dd if=/dev/zero bs=28 count=1
+    # gname (32 bs)
+    echo -n 'root'
+    dd if=/dev/zero bs=28 count=1
+    # devmajor (8 bs)
+    echo -n '0000000'
+    dd if=/dev/zero bs=1 count=1
+    # devminor (8 bs)
+    echo -n '0000000'
+    dd if=/dev/zero bs=1 count=1
+    # prefix (155 bs)
+    dd if=/dev/zero bs=155 count=1
+    # 512-500 bs 512-byte block padding
+    dd if=/dev/zero bs=12 count=1
+  } > "${TMP_DIR}/intermediate_global_header"
+  # print out header with proper checksum
+  dd if="${TMP_DIR}/intermediate_global_header" bs=148 count=1
+  create_tar_header_chksum "${TMP_DIR}/intermediate_global_header"
+  dd if="${TMP_DIR}/intermediate_global_header" skip=156 bs=1 count=356
+# 159 bytes of data
+cat <<PAX_HEADERS
+79 pax_sha256=${1}
+80 file_sha256=${2}
+PAX_HEADERS
+    # padding for the rest of the 512-byte block
+    dd if=/dev/zero bs=353 count=1
+}
 outer_tar_prefix() (
   # The purpose of this function is to create a subshell which is equivalent to
   # running `tar --format pax -c file.tar` which creates an outer tar header
@@ -453,8 +526,17 @@ outer_tar_prefix() (
     header_size="$()"
     dd_max_read "$(ustarSize < "$TMP_DIR/prefix_header")" > "$TMP_DIR/prefix_header_body"
     dd bs=512 count=1 > "$TMP_DIR/prefix_header_file"
+    prefix_files=()
+    if [ "${enforce_integrity}" = true ]; then
+      file_checksum="$(checksum_data "$1")"
+      pax_checksum="$(checksum_data "$TMP_DIR/prefix_header_body")"
+      pax_global_integrity_header "$pax_checksum" "$file_checksum" > "$TMP_DIR/global_header"
+      prefix_files+=( "$TMP_DIR/global_header" )
+      echo "pax global header size: $(LC_ALL=C wc -c < "$TMP_DIR/global_header")" >&2
+    fi
+    prefix_files+=( "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file" )
     # create tar prefix
-    cat "$TMP_DIR/prefix_header" "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file"
+    cat "${prefix_files[@]}"
   }
 )
 canonical_path() (
@@ -472,7 +554,8 @@ full_paths=()
 relative_paths=()
 nosudo=false
 largetar_dir="${TMP_DIR}"
-export largetar_dir nosudo
+enforce_integrity=false
+export largetar_dir nosudo enforce_integrity
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --)
@@ -502,6 +585,10 @@ while [ "$#" -gt 0 ]; do
         exit 1
       fi
       largetar_dir="$(canonical_path "${largetar_dir}")"
+      shift
+      ;;
+    -s|--sha256)
+      enforce_integrity=true
       shift
       ;;
     /*)
