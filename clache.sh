@@ -514,7 +514,6 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
-
 if [ "$mode" = extract ]; then
   if [ -w /dev/shm ]; then
     rmdir "$TMP_DIR"
@@ -528,6 +527,10 @@ if [ "$mode" = extract ]; then
   extract
 else
   # create
+  if [ -z "${full_paths:-}" ] && [ -z "${relative_paths:-}" ]; then
+    echo 'ERROR: Nothing to create.  No file paths were provided as args.' >&2
+    exit 1
+  fi
   if [ -n "${full_paths:-}" ]; then
     (
       archive_command=()
@@ -551,11 +554,11 @@ else
       echo "${archive_command[*]}" >&2
       "${archive_command[@]}" > "${largetar_dir}/pwd-cache.tar"
       cd "${largetar_dir}"
-      tar --format pax -c pwd-cache.tar
+      outer_tar_prefix pwd-cache.tar > "$TMP_DIR"/pwd-cache-prefix
+      cat "$TMP_DIR"/pwd-cache-prefix pwd-cache.tar
       rm -f pwd-cache.tar
     )
-  else
-    # End of pax tar archive is two 512-byte blocks of all zeros.
-    dd if=/dev/zero bs=1024 count=1
   fi
+  # End of pax tar archive is two 512-byte blocks of all zeros.
+  dd if=/dev/zero bs=1024 count=1
 fi
