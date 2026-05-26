@@ -601,7 +601,7 @@ outer_tar_prefix() (
     fi
     if [ "${enforce_integrity}" = true ]; then
       prefix_files+=( "$TMP_DIR/global_header" )
-      file_checksum="$(checksum_data "$1")"
+      file_checksum="$(<"$TMP_DIR"/tar-checksum)"
       if [ "$pax_header_size" -gt 0 ]; then
         pax_checksum="$(trim=1 dd_max_read "$pax_header_size" < "$TMP_DIR/prefix_header_body" | checksum_data -)"
       else
@@ -707,7 +707,13 @@ else
       fi
       archive_command+=( tar --format pax -cC / -- "${full_paths[@]}" )
       echo "${archive_command[*]}" >&2
-      "${archive_command[@]}" > "${largetar_dir}/os-cache.tar"
+      "${archive_command[@]}" | {
+        if [ "${enforce_integrity}" = true ]; then
+          tee >(checksum_data - > "$TMP_DIR"/tar-checksum)
+        else
+          cat
+        fi
+      } > "${largetar_dir}/os-cache.tar"
       cd "${largetar_dir}"
       # same as `tar --format pax -c os-cache.tar` except it does not
       # write the end or archive marker.
@@ -720,7 +726,13 @@ else
     (
       archive_command=( tar --format pax -c -- "${relative_paths[@]}" )
       echo "${archive_command[*]}" >&2
-      "${archive_command[@]}" > "${largetar_dir}/pwd-cache.tar"
+      "${archive_command[@]}" | {
+        if [ "${enforce_integrity}" = true ]; then
+          tee >(checksum_data - > "$TMP_DIR"/tar-checksum)
+        else
+          cat
+        fi
+      } > "${largetar_dir}/pwd-cache.tar"
       cd "${largetar_dir}"
       outer_tar_prefix pwd-cache.tar > "$TMP_DIR"/pwd-cache-prefix
       cat "$TMP_DIR"/pwd-cache-prefix pwd-cache.tar
