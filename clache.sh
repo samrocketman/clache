@@ -281,12 +281,12 @@ readTarHeader() {
     exit 1
   fi
   if [ "${enforce_integrity}" = true ]; then
-    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" pax_sha256)"
+    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" pax_chk)"
     if [ -z "${checksum:-}" ]; then
       echo 'ERROR: cache integrity is enabled but no pax header checksum available.' >&2
       exit 1
     fi
-    echo "${checksum}  -" > "${TMP_DIR}/checksum"
+    echo "${checksum}" > "${TMP_DIR}/checksum"
     echo "header checksum$(checksum_with_file_status < "$PAX_HEADER")"
     if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
@@ -463,12 +463,12 @@ checksum_with_file_status() {
 }
 extract_or_enforce_checksum() {
   if [ "${enforce_integrity}" = true ]; then
-    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" file_sha256)"
+    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" fil_chk)"
     if [ -z "${checksum:-}" ]; then
       echo 'ERROR: cache integrity is enabled but no archive checksum available.' >&2
       exit 1
     fi
-    echo "${checksum}  -" > "$TMP_DIR/checksum"
+    echo "${checksum}" > "$TMP_DIR/checksum"
     tee >(echo "archive checksum$(checksum_with_file_status)" >&2) | "$@"
     if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
@@ -515,16 +515,40 @@ extract() {
 }
 checksum_data() {
   if [ "${1:-}" = '-c' ]; then
-    shasum -a 256 "$@"
+    if [ "$(dd if="$2" bs=5 count=1)" = 'XXH3_' ]; then
+      xxhsum -H3 "$@" | sed 's/stdin/-/'
+    else
+      shasum -a 256 "$@"
+    fi
   else
-    shasum -a 256 "$@" | head -c64
+    if type -P xxhsum > /dev/null; then
+      xxhsum -H3 "$@"
+    else
+      shasum -a 256 "$@" | head -c64
+    fi
   fi
+}
+create_pax_headers() {
+  local bs header
+  for x in "$@"; do
+    bs="$((${#x}+1))"
+    bs="$((${#bs}+1+bs))"
+    header="$bs $x"
+    if [ "$bs" -lt "$((${#header}+1))" ]; then
+      bs="$((bs+1))"
+      header="$bs $x"
+    fi
+    echo "$header"
+  done
 }
 pax_global_integrity_header() {
   # pax global header with pre-computed data and blocks for integrity checks:
   #  - The header is always 159 bytes (octal `237`).
   #  - 512-byte block nul padding is always 353 bytes.
   #  - Pax header checksum is always octal 7499.
+  create_pax_headers "pax_chk=${1}" "fil_chk=${2}" > "$TMP_DIR/tmp_pax_headers"
+  local header_bs
+  header_bs="$(stat_file_size "$TMP_DIR/tmp_pax_headers")"
   {
     # name (100 bs)
     echo -n 'pax_global_integrity_header'
@@ -538,8 +562,8 @@ pax_global_integrity_header() {
     # gid (8 bs)
     echo -n '0000000'
     dd if=/dev/zero bs=1 count=1
-    # size (12 bs)
-    echo -n '00000000237'
+    # size (octal 12 bs; last b is nul)
+    printf '%011o' "$header_bs"
     dd if=/dev/zero bs=1 count=1
     # mtime (12 bs)
     printf '%o' "$(date +%s)" | head -c11
@@ -576,13 +600,12 @@ pax_global_integrity_header() {
   dd if="${TMP_DIR}/intermediate_global_header" bs=148 count=1
   create_tar_header_chksum "${TMP_DIR}/intermediate_global_header"
   dd if="${TMP_DIR}/intermediate_global_header" skip=156 bs=1 count=356
-# 159 bytes of data
-cat <<PAX_HEADERS
-79 pax_sha256=${1}
-80 file_sha256=${2}
-PAX_HEADERS
-    # padding for the rest of the 512-byte block
-    dd if=/dev/zero bs=353 count=1
+  cat "$TMP_DIR/tmp_pax_headers"
+  header_bs="$((512-header_bs%512))"
+  # padding for the rest of the 512-byte block
+  if [ "$header_bs" -gt 0 ]; then
+    dd if=/dev/zero bs="$header_bs" count=1
+  fi
 }
 outer_tar_prefix() (
   # The purpose of this function is to create a subshell which is equivalent to
@@ -667,7 +690,7 @@ while [ "$#" -gt 0 ]; do
       largetar_dir="$(canonical_path "${largetar_dir}")"
       shift
       ;;
-    -s|--sha256)
+    -s|--verify-checksums)
       enforce_integrity=true
       shift
       ;;
