@@ -287,8 +287,8 @@ readTarHeader() {
       exit 1
     fi
     echo "${checksum}  -" > "${TMP_DIR}/checksum"
-    if ! checksum_data -c "${TMP_DIR}/checksum" < "$PAX_HEADER" > /dev/null; then
-      echo 'ERROR: aborted because pax file header checksum failed.' >&2
+    echo "header checksum$(checksum_with_file_status < "$PAX_HEADER")"
+    if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
     fi
   fi
@@ -456,6 +456,27 @@ dd_max_read() {
     dd bs="$FILE_SIZE" count=1
   fi
 }
+checksum_with_file_status() {
+  checksum_data -c "$TMP_DIR/checksum" && \
+    echo $? > "$TMP_DIR/checksum-status" || \
+    echo $? > "$TMP_DIR/checksum-status"
+}
+extract_or_enforce_checksum() {
+  if [ "${enforce_integrity}" = true ]; then
+    checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" file_sha256)"
+    if [ -z "${checksum:-}" ]; then
+      echo 'ERROR: cache integrity is enabled but no archive checksum available.' >&2
+      exit 1
+    fi
+    echo "${checksum}  -" > "$TMP_DIR/checksum"
+    tee >(echo "archive checksum$(checksum_with_file_status)" >&2) | "$@"
+    if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
+      exit 1
+    fi
+  else
+    "$@"
+  fi
+}
 readTarFile() {
   local FILE_NAME FILE_SIZE
   readTarHeader
@@ -467,17 +488,17 @@ readTarFile() {
       dd_max_read "$FILE_SIZE" | {
         if [ "$nosudo" = true ]; then
           echo "tar -xC / -f $FILE_NAME" >&2
-          tar -xC /
+          extract_or_enforce_checksum tar -xC /
         else
           echo "sudo tar -xC / -f $FILE_NAME" >&2
-          sudo tar -xC /
+          extract_or_enforce_checksum sudo tar -xC /
         fi
       }
       ;;
     pwd-cache.tar)
       echo "$FILE_NAME is $FILE_SIZE bytes" >&2
       echo "tar -xf $FILE_NAME" >&2
-      dd_max_read "$FILE_SIZE" | tar -x
+      dd_max_read "$FILE_SIZE" | extract_or_enforce_checksum tar -x
       ;;
     *)
       # skip processing
@@ -488,12 +509,16 @@ readTarFile() {
 }
 extract() {
   # iterate all files
-  while readTarFile; do
+  while readTarFile || exit $?; do
     true
   done
 }
 checksum_data() {
-  shasum -a 256 "$@" | head -c64
+  if [ "${1:-}" = '-c' ]; then
+    shasum -a 256 "$@"
+  else
+    shasum -a 256 "$@" | head -c64
+  fi
 }
 pax_global_integrity_header() {
   # pax global header with pre-computed data and blocks for integrity checks:
