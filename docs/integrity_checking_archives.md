@@ -230,6 +230,8 @@ Table notes:
    octal.
 3. `chksum` varies because `mtime` is always different and `size` is different
    with different algorithms.
+3. Not mentioned in the above table is `(+null 12 bs)` padding at the end to
+   fill in the 512-byte block.
 
 The PAX Global Header is both the above 512-byte block followed by the data body
 512-byte block noted in the next section which contains PAX records
