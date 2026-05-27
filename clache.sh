@@ -315,6 +315,7 @@ determineTarFormat() {
   fi
 }
 readTarHeader() {
+  local checksum
   determineTarFormat
   if [ "$tar_format" = ustar ]; then
     return
