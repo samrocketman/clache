@@ -69,7 +69,8 @@
 
 # Quickly check for prerequisite utilities
 failed_preflight=false
-for x in awk bc od dd tar xxd tr; do
+# xxhsum is an optional dependency which falls back to shasum
+for x in awk bc dd mkfifo od shasum tar tee tr xxd; do
   if ! type -P "$x" > /dev/null; then
     echo "Missing dependency '$x'." >&2
     failed_preflight=true
