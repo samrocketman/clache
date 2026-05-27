@@ -709,8 +709,10 @@ outer_tar_prefix() (
         exit 1
       fi
     fi
+    verify_tar_chksum "$TMP_DIR/prefix_header"
     prefix_files+=( "$TMP_DIR/prefix_header" )
     if [ "$pax_header_size" -gt 0 ]; then
+      verify_tar_chksum "$TMP_DIR/prefix_header_file"
       prefix_files+=( "$TMP_DIR/prefix_header_body" "$TMP_DIR/prefix_header_file" )
     fi
     # create tar prefix
