@@ -430,7 +430,7 @@ get_pax_field() {
     fi
     record_header="$(
       set +o pipefail
-      skip="$skip_bytes" trim=1 dd_max_read "$max_bs" < "$1" | \
+      skip="$skip_bytes" trim=1 dd_max_read 1024 < "$1" | \
       awk '{gsub(/=.*$/, "", $0);print;exit}'
     )"
     if [ -z "${record_header:-}" ]; then
