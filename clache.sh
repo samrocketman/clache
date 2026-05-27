@@ -521,11 +521,6 @@ dd_max_read() {
     dd bs="$FILE_SIZE" count=1
   fi
 }
-checksum_with_file_status() {
-  checksum_data -c "$TMP_DIR/checksum" && \
-    echo $? > "$TMP_DIR/checksum-status" || \
-    echo $? > "$TMP_DIR/checksum-status"
-}
 extract_or_enforce_checksum() {
   if [ "${enforce_integrity}" = true ]; then
     checksum="$(get_pax_field "$PAX_GLOBAL_HEADER" fil_chk)"
