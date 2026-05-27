@@ -423,7 +423,7 @@ get_pax_field() {
   max_bs="$(stat_file_size "$1")"
   skip_bytes=0
   previously_skipped=-1
-  pax_record_limit=1000
+  pax_record_limit=50
   pax_records=0
   until [ "$skip_bytes" -eq "$previously_skipped" ]; do
     if [ "$pax_records" -gt "$pax_record_limit" ]; then
