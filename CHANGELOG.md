@@ -1,3 +1,28 @@
+# clache v0.12 - May 26, 2026
+
+Major changes:
+
+- Encountering unexpected files in the archive will now cause `clache.sh` to
+  exit in error.  This makes it even more strict in its file format which is
+  fine because it's special purpose.
+- Instead of reading unlimited files from the archive only two are read.  This
+  is also part of increasing file format strictness in `clache.sh`.
+
+Bugs fixed:
+
+- Bugfix silent failure when creating archives with invalid tar headers.  When
+  creating a tar, intermediate header data now has its chksum field verified as
+  a quick validity check.
+
+Other changes:
+
+- Clean up some old code and other bash hygiene.
+- PAX record limit reduced from 1k to 50 tightening the limit further.
+- Fix minor PAX Global Header padding bug which was impossible to trigger but
+  fixing for logic correctness.
+- Internal function `get_pax_field` only reads first 1KB instead of entire pax
+  header data when checking record data.
+
 # clache v0.11 - May 26, 2026
 
 - Support for integrity checking archive.  Detects cache corruption after the
