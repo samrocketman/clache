@@ -17,14 +17,30 @@ Features:
   `clache.sh` itself.
 - Archive integrity checking guarantees the cache file was not corrupted after
   its creation.
+- Avoids double-writing data to disk while calculating checksums.  Checksums
+  calculated via data stream.
 
-Supported algorithms (archive uses only one for all integrity checking):
+Notable drawbacks:
+
+- Integrity checking archives are slower to process compared to archives with no
+  integrity checking.  However, the purpose here is verifying correctness of
+  data at a slight time cost.
+- Checksums are calculated at the same time as extraction.  Checksum results are
+  only known after an archive is fully extracted.  If there was corruption
+  detected, then the corruption was already written to the OS disk.  This script
+  is intended for CI systems with ephemeral infrastructure (one time use;
+  deleted after use).  If this is a problem for your use case, then file a
+  GitHub issue and describe why.
+
+Benchmarks for different algorithms are available later in this document.
+
+Supported algorithms (choose one at creation time):
 
 - [xxHash] - `./clache.sh --xxh [0|1|2|3]` extremely fast non-cryptographic hash
   algorithm.
 - [SHA] - `./clache.sh --sha [1|256]` provides cryptographic integrity checking.
-  sha1 available for speed at the cost of security and sha2-sha256 is
-  recommended for the most secure and correct integrity checking.
+  sha1 available for speed/general availability at the cost of security.
+  sha2-sha256 is recommended for the most secure and correct integrity checking.
 
 [xxHash]: https://github.com/cyan4973/xxhash
 [SHA]: https://en.wikipedia.org/wiki/Secure_Hash_Algorithms
