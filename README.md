@@ -4,21 +4,25 @@ A CLI based generic CI/CD cache utility intended to create or extract caches
 from streams.  Ideal for ephemeral systems where cloud object storage is
 available to save and restore state across ephemeral nodes.
 
-No AI was used to create this project.
+No AI was used to write this project.
 
 ## Examples
+
+This details creating a basic archive.  However, [integrity checking archives]
+are also available which are more robust against corruption and have a slight
+time cost to verify data.
 
 Create the cache.
 
 ```bash
-clache.sh -n -c ~/.m2/repository target | aws s3 cp - s3://your-bucket/file.tar
+clache.sh -c -n ~/.m2/repository target | aws s3 cp - s3://your-bucket/file.tar
 ```
 
 Extracting the cache from stdin without writing full tar files to disk (a few KB
 of header data gets written during stream inspection).
 
 ```bash
-aws s3 cp s3://your-bucket/file.tar - | clache.sh -n -e
+aws s3 cp s3://your-bucket/file.tar - | clache.sh -e -n
 ```
 
 # Project description
@@ -98,8 +102,26 @@ OPTIONS
     intermediate tar file can be significantly larger than available /tmp file
     space.  Default: /tmp mktemp directory.
 
+  -s, --verify-checksum
+    Protects cache against corruption. Header and archive data checksums are
+    calculated and verified.  This option works for creation or extraction.
+
+  -a SIZE, --sha SIZE
+    Choose the shasum SIZE (1 or 256) to use for archive integrity.
+    Default: 1
+
+  -H SIZE, --xxh SIZE
+    Choose the xxh SIZE (0, 1, 2, or 3 supported) to use for archive integrity.
+    Default: 1
+
+  --no-detect
+    If an archive was created with --verify-checksum, this disables the
+    autodetection which skips the integrity checks for archives that would
+    normally verify checksums.
+
   --help, -h
     Show help.
 ```
 
+[integrity checking archives]: docs/integrity_checking_archives.md
 [opengroup pax publication]: https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html
