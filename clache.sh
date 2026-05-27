@@ -206,6 +206,50 @@ verify_tar_chksum() {
     exit 1
   fi
 }
+# Tee stdin through a fifo for concurrent checksum create or verify.
+#   create FILE       write stream to FILE; checksum -> $TMP_DIR/tar-checksum
+#   verify-file FILE  checksum -c file contents; output -> checksum-output
+#   verify-stream     tee stream to stdout; checksum -c -> checksum-output
+stream_checksum() {
+  local mode="$1"
+  shift
+  local fifo="$TMP_DIR/checksum.fifo"
+  local sumpid
+  mkfifo "$fifo"
+  case "$mode" in
+    create)
+      checksum_data - < "$fifo" > "$TMP_DIR/tar-checksum" &
+      sumpid=$!
+      tee "$fifo" > "$1"
+      ;;
+    verify-file)
+      (
+        checksum_data -c "$TMP_DIR/checksum"
+        echo $? > "$TMP_DIR/checksum-status"
+      ) < "$fifo" > "$TMP_DIR/checksum-output" &
+      sumpid=$!
+      cat "$1" > "$fifo"
+      ;;
+    verify-stream)
+      (
+        checksum_data -c "$TMP_DIR/checksum"
+        echo $? > "$TMP_DIR/checksum-status"
+      ) < "$fifo" > "$TMP_DIR/checksum-output" &
+      sumpid=$!
+      tee "$fifo"
+      ;;
+    *)
+      echo "ERROR: unknown stream_checksum mode '${mode}'." >&2
+      rm -f "$fifo"
+      exit 1
+      ;;
+  esac
+  wait "$sumpid"
+  rm -f "$fifo"
+  if [ "$mode" = verify-file ]; then
+    cat "$TMP_DIR/checksum-output"
+  fi
+}
 determineTarFormat() {
   local typeflag
   dd bs=512 count=1 > "$TAR_HEADER"
@@ -307,7 +351,7 @@ readTarHeader() {
       exit 1
     fi
     echo "${checksum}" > "${TMP_DIR}/checksum"
-    echo "header checksum$(checksum_with_file_status < "$PAX_HEADER")"
+    echo "header checksum$(stream_checksum verify-file "$PAX_HEADER")"
     if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
     fi
@@ -489,7 +533,8 @@ extract_or_enforce_checksum() {
       exit 1
     fi
     echo "${checksum}" > "$TMP_DIR/checksum"
-    tee >(echo "${FILE_NAME:-archive} checksum$(checksum_with_file_status)" >&2) | "$@"
+    stream_checksum verify-stream | "$@"
+    echo "${FILE_NAME:-archive} checksum$(<"$TMP_DIR/checksum-output")" >&2
     if [ ! "$(<"$TMP_DIR/checksum-status")" = 0 ]; then
       exit 1
     fi
@@ -539,7 +584,7 @@ checksum_data() {
       68) shasum -a 256 "$@" ;;
       44) shasum -a 1 "$@" ;;
       40) xxhsum -H2 "$@" | sed 's/stdin/-/' ;;
-      29) xxhsum -H3 "$@" | sed 's/stdin/-/' ;;
+      29|32) xxhsum -H3 "$@" | sed 's/stdin/-/' ;;
       24) xxhsum -H1 "$@" | sed 's/stdin/-/' ;;
       16) xxhsum -H0 "$@" | sed 's/stdin/-/' ;;
       *)
@@ -799,13 +844,11 @@ else
       fi
       archive_command+=( tar --format pax -cC / -- "${full_paths[@]}" )
       echo "${archive_command[*]}" >&2
-      "${archive_command[@]}" | {
-        if [ "${enforce_integrity}" = true ]; then
-          tee >(checksum_data - > "$TMP_DIR"/tar-checksum)
-        else
-          cat
-        fi
-      } > "${largetar_dir}/os-cache.tar"
+      if [ "${enforce_integrity}" = true ]; then
+        "${archive_command[@]}" | stream_checksum create "${largetar_dir}/os-cache.tar"
+      else
+        "${archive_command[@]}" > "${largetar_dir}/os-cache.tar"
+      fi
       cd "${largetar_dir}"
       # same as `tar --format pax -c os-cache.tar` except it does not
       # write the end or archive marker.
@@ -818,13 +861,11 @@ else
     (
       archive_command=( tar --format pax -c -- "${relative_paths[@]}" )
       echo "${archive_command[*]}" >&2
-      "${archive_command[@]}" | {
-        if [ "${enforce_integrity}" = true ]; then
-          tee >(checksum_data - > "$TMP_DIR"/tar-checksum)
-        else
-          cat
-        fi
-      } > "${largetar_dir}/pwd-cache.tar"
+      if [ "${enforce_integrity}" = true ]; then
+        "${archive_command[@]}" | stream_checksum create "${largetar_dir}/pwd-cache.tar"
+      else
+        "${archive_command[@]}" > "${largetar_dir}/pwd-cache.tar"
+      fi
       cd "${largetar_dir}"
       outer_tar_prefix pwd-cache.tar > "$TMP_DIR"/pwd-cache-prefix
       cat "$TMP_DIR"/pwd-cache-prefix pwd-cache.tar
