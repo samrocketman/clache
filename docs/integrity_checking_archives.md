@@ -89,7 +89,7 @@ This diagram showcases how data flows through `clache.sh` while avoiding writing
 to disk.  An archive stream is processed via stdin and integrity checking
 happens alongside extraction.  For large archives with an expensive checksum
 algorithm, the checksumming could slightly slow down how fast data is extracted.
-`xxhsum` support is added to minimize the performance penalty of integrity
+`xxhsum` support is available to minimize the performance penalty of integrity
 checking.
 
 ```mermaid
@@ -211,8 +211,8 @@ the table.  The second 512-byte block is detailed in the next section.
 | uid        | 108    | 8      | `0000000` (+nul)                           |
 | gid        | 116    | 8      | `0000000` (+nul)                           |
 | size       | 124    | 12     | `00000000000` (+nul)                       |
-| mtime      | 136    | 12     | unix timestamp octal `00000000000` (+nul)  |
-| chksum     | 148    | 8      | calculated octal `0000000` (+nul)          |
+| mtime      | 136    | 12     | `00000000000` (+nul)                       |
+| chksum     | 148    | 8      | `00000000`                                 |
 | typeflag   | 156    | 1      | `g`                                        |
 | linkname   | 157    | 100    | (+nul 100 bs)                              |
 | magic      | 257    | 6      | ustar (+nul)                               |
@@ -226,12 +226,14 @@ the table.  The second 512-byte block is detailed in the next section.
 Table notes:
 
 1. `size` can vary depending on the checksum algorithm used.
-2. `mtime` is populated when the archive was created via `date +%s`.
-3. `chksum` varies because mtime is always different and size different with
-   different algorithms.
+2. `mtime` is populated when the archive was created via `date +%s` converted to
+   octal.
+3. `chksum` varies because `mtime` is always different and `size` is different
+   with different algorithms.
 
 The PAX Global Header is both the above 512-byte block followed by the data body
-noted in the next section which contains PAX records (key-values).
+512-byte block noted in the next section which contains PAX records
+(key-values).
 
 ### PAX Global Header data body
 
