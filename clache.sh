@@ -82,7 +82,7 @@ if [ "$failed_preflight" = true ]; then
 fi
 
 set -euo pipefail
-export tar_format TAR_HEADER PAX_HEADER PAX_GLOBAL_HEADER TMP_DIR INNER_PAX_TAR
+export tar_format TAR_HEADER PAX_HEADER PAX_GLOBAL_HEADER TMP_DIR
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -612,10 +612,6 @@ create_pax_headers() {
   done
 }
 pax_global_integrity_header() {
-  # pax global header with pre-computed data and blocks for integrity checks:
-  #  - The header is always 159 bytes (octal `237`).
-  #  - 512-byte block nul padding is always 353 bytes.
-  #  - Pax header checksum is always octal 7499.
   create_pax_headers "pax_chk=${1}" "fil_chk=${2}" > "$TMP_DIR/tmp_pax_headers"
   local header_bs
   header_bs="$(stat_file_size "$TMP_DIR/tmp_pax_headers")"
