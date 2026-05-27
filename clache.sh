@@ -70,7 +70,8 @@
 # Quickly check for prerequisite utilities
 failed_preflight=false
 # xxhsum is an optional dependency which falls back to shasum
-for x in awk bc dd mkfifo od shasum tar tee tr xxd; do
+# printf is a shell built-in.
+for x in awk bc cat date dd grep head mkfifo mktemp mv od sed shasum stat tar tee tr wc xxd; do
   if ! type -P "$x" > /dev/null; then
     echo "Missing dependency '$x'." >&2
     failed_preflight=true
