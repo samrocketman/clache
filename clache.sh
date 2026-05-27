@@ -252,6 +252,13 @@ stream_checksum() {
     cat "$TMP_DIR/checksum-output"
   fi
 }
+algorithm_supported() {
+  case "${1:-}" in
+    shasum) case "${2:-}" in 1|256) true;; *) false ;; esac ;;
+    xxhsum) case "${2:-}" in 0|1|2|3) true;; *) false ;; esac ;;
+    *) false ;;
+  esac
+}
 determineTarFormat() {
   local typeflag
   dd bs=512 count=1 > "$TAR_HEADER"
@@ -287,7 +294,7 @@ determineTarFormat() {
     local cl_utl cl_alg
     cl_utl="$(get_pax_field "$PAX_GLOBAL_HEADER" cl_utl)"
     cl_alg="$(get_pax_field "$PAX_GLOBAL_HEADER" cl_alg)"
-    if [ -z "${cl_utl:-}" ] || [ -z "${cl_alg:-}" ]; then
+    if ! algorithm_supported "${cl_utl:-}" "${cl_alg:-}"; then
       echo 'ERROR: could not determine checksum algorithm.' >&2
       exit 1
     else
@@ -587,6 +594,10 @@ extract() {
   # there's only two inner archive files in a clache archive.
   readTarFile
   readTarFile
+  # trigger end of archive logic
+  readTarFile
+  echo 'ERROR: The archive has more data than expected.' >&2
+  exit 1
 }
 checksum_data() {
   case "$sum_util" in
@@ -790,8 +801,8 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     -H|--xxh)
-      if ! grep '^[0-3]$' <<< "$2" > /dev/null; then
-        echo 'ERROR: --xxh 0-3 supported.' >&2
+      if ! algorithm_supported xxhsum "${2:-}"; then
+        echo 'ERROR: Only --xxh 0-3 supported.' >&2
         exit 1
       fi
       sum_util=xxhsum
@@ -801,10 +812,8 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     -a|--sha)
-      if {
-        [ ! "$2" = 1 ] && [ ! "$2" = 256 ]
-      }; then
-        echo 'ERROR: --sha 1 or --sha 256 supported.' >&2
+      if ! algorithm_supported shasum "${2:-}"; then
+        echo 'ERROR: Only --sha 1 or --sha 256 supported.' >&2
         exit 1
       fi
       sum_util=shasum
