@@ -113,6 +113,12 @@ Hardware
 Benchmark code is in [benchmark.sh](benchmark.sh).  Note: it will create a 10GB
 file in your home directory at `~/10gb`.
 
+This small one-liner will run all benchmarks at once.
+
+```bash
+time ( ./docs/benchmark.sh big 2>&1 && ./docs/benchmark.sh small 2>&1; ) > log 2>&1
+```
+
 `./docs/benchmark.sh large` (~10GB of large file data; 10737438720 bytes):
 repeated 3 times and fastest time for each entry taken.
 
