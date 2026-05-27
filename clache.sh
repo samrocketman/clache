@@ -573,10 +573,9 @@ readTarFile() {
   esac
 }
 extract() {
-  # iterate all files
-  while readTarFile || exit $?; do
-    true
-  done
+  # there's only two inner archive files in a clache archive.
+  readTarFile
+  readTarFile
 }
 checksum_data() {
   if [ "${1:-}" = '-c' ]; then
