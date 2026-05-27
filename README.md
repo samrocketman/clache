@@ -1,5 +1,7 @@
 # clache
 
+Pronounced `/klăsh/` or "clash".
+
 A CLI based generic CI/CD cache utility intended to create or extract caches
 from streams.  Ideal for ephemeral systems where cloud object storage is
 available to save and restore state across ephemeral nodes.
