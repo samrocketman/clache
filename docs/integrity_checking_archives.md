@@ -252,12 +252,18 @@ The following are PAX records and their values:
 - `fil_chk` contains a checksum of the entire archive data following this
   header.  This could be verifying hundreds of megabytes or even gigabytes; the
   cache data itself.
+- `cl_utl` contains checksum utility used to create archive.  Either `xxhsum` or
+  `shasum`.
+- `cl_agl` value is one of: 0, 1, 2, 3, or 256.  Depending on `cl_utl` means
+  either `--xxh [0|1|2|3]` or `--sha [1|256]`.
 
 The following is a sample of a PAX record data body.
 
 ```
 25 pax_chk=some checksum
 25 fil_chk=some checksum
+17 cl_utl=xxhsum
+12 cl_alg=1
 ```
 
 Generic format:

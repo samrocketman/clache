@@ -1,3 +1,8 @@
+# clache v0.13 - May 26, 2026
+
+- Algorithm information now stored in the PAX Global Header when an integrity
+  checking archive is created.
+
 # clache v0.12 - May 26, 2026
 
 Major changes:

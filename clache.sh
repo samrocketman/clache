@@ -284,6 +284,20 @@ determineTarFormat() {
       exit 1
     fi
     dd_max_read "$header_size" | trim=1 dd_max_read "$header_size" > "$PAX_GLOBAL_HEADER"
+    local cl_utl cl_alg
+    cl_utl="$(get_pax_field "$PAX_GLOBAL_HEADER" cl_utl)"
+    cl_alg="$(get_pax_field "$PAX_GLOBAL_HEADER" cl_alg)"
+    if [ -z "${cl_utl:-}" ] || [ -z "${cl_alg:-}" ]; then
+      echo 'ERROR: could not determine checksum algorithm.' >&2
+      exit 1
+    else
+      sum_util="${cl_utl}"
+      if [ "${sum_util}" = shasum ]; then
+        sha_size="${cl_alg}"
+      elif [ "${sum_util}" = xxhsum ]; then
+        xxh_size="${cl_alg}"
+      fi
+    fi
 
     # continue on with pax detection and re-initialze values
     dd bs=512 count=1 > "$TAR_HEADER"
@@ -575,28 +589,22 @@ extract() {
   readTarFile
 }
 checksum_data() {
-  if [ "${1:-}" = '-c' ]; then
-    case "$(stat_file_size "$2")" in
-      68) shasum -a 256 "$@" ;;
-      44) shasum -a 1 "$@" ;;
-      40) xxhsum -H2 "$@" | sed 's/stdin/-/' ;;
-      29|32) xxhsum -H3 "$@" | sed 's/stdin/-/' ;;
-      24) xxhsum -H1 "$@" | sed 's/stdin/-/' ;;
-      16) xxhsum -H0 "$@" | sed 's/stdin/-/' ;;
-      *)
-        echo 'ERROR: unknown checksum data detected.' >&2
-        exit 1
-    esac
-  else
-    case "$sum_util" in
-      xxhsum)
+  case "$sum_util" in
+    xxhsum)
+      if [ "${1:-}" = '-c' ]; then
+        xxhsum -H"$xxh_size" "$@" | sed 's/stdin/-/'
+      else
         xxhsum -H"$xxh_size" "$@"
-        ;;
-      shasum)
-        shasum -a "$sha_size" "$@"
-        ;;
-    esac
-  fi
+      fi
+      ;;
+    shasum)
+      shasum -a "$sha_size" "$@"
+      ;;
+    *)
+      echo 'ERROR: unknown checksum data detected.' >&2
+      exit 1
+      ;;
+  esac
 }
 create_pax_headers() {
   local bs header
@@ -612,7 +620,14 @@ create_pax_headers() {
   done
 }
 pax_global_integrity_header() {
-  create_pax_headers "pax_chk=${1}" "fil_chk=${2}" > "$TMP_DIR/tmp_pax_headers"
+  local cl_utl cl_alg
+  cl_utl="$sum_util"
+  if [ "$cl_utl" = shasum ]; then
+    cl_alg="$sha_size"
+  elif [ "$cl_utl" = xxhsum ]; then
+    cl_alg="$xxh_size"
+  fi
+  create_pax_headers "pax_chk=${1}" "fil_chk=${2}" "cl_utl=${cl_utl}" "cl_alg=${cl_alg}" > "$TMP_DIR/tmp_pax_headers"
   local header_bs
   header_bs="$(stat_file_size "$TMP_DIR/tmp_pax_headers")"
   {
