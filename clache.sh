@@ -567,9 +567,8 @@ readTarFile() {
       dd_max_read "$FILE_SIZE" | extract_or_enforce_checksum tar -x
       ;;
     *)
-      # skip processing
-      echo "Skipping unrecognized file; seeking $FILE_SIZE bytes" >&2
-      dd bs=512 count="$((( FILE_SIZE+511 )/512))" of=/dev/null
+      echo 'ERROR: an unknown file was encountered in the cache archive.' >&2
+      exit 1
       ;;
   esac
 }
