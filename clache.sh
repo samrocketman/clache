@@ -676,7 +676,7 @@ pax_global_integrity_header() {
   cat "$TMP_DIR/tmp_pax_headers"
   header_bs="$((512-header_bs%512))"
   # padding for the rest of the 512-byte block
-  if [ "$header_bs" -gt 0 ]; then
+  if [ "$header_bs" -gt 0 ] && [ ! "$header_bs" -eq 512 ]; then
     dd if=/dev/zero bs="$header_bs" count=1
   fi
 }
