@@ -70,10 +70,14 @@ publication].
 - BSD tar supported.
 - GNU tar supported.
 
-> _Note: both bash and tar (i.e. `apk add bash tar`) on alpine Linux do not
-> appear to support critical features used by this script.  I may try to figure
-> out how to widen compatibility further in the future but for now alpine Linux
-> is not supported._
+> If using alpine you'll need to install prerequisite packages because the
+> busybox versions of `tar` (no pax support) and `tr` (character class support
+> like `[:print:]` is not compiled to save space in many alpine installs) do not
+> have required support for the features required by `clache.sh`.
+
+    apk add --no-cache bash tar coreutils
+    # and optionally
+    apk add --no-cache xxhash
 
 # Help doc
 

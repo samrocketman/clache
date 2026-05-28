@@ -73,10 +73,21 @@ failed_preflight=false
 # printf is a shell built-in.
 for x in awk bc cat date dd grep head mkfifo mktemp mv od sed shasum stat tar tee tr wc xxd; do
   if ! type -P "$x" > /dev/null; then
+    if [ "$x" = shasum ] && (type -P sha256sum && type -P sha1sum; ) > /dev/null; then
+      continue
+    fi
     echo "Missing dependency '$x'." >&2
     failed_preflight=true
   fi
 done
+for x in tr tar; do
+  util_version="$(readlink $(type -P tr))"
+  if [ "${util_version##*/}" = busybox ]; then
+    echo "busybox $x is not supported; apk add tar coreutils"
+    failed_preflight=true
+  fi
+done
+unset util_version
 if [ "$failed_preflight" = true ]; then
   exit 1
 fi
@@ -98,6 +109,17 @@ file_size_digits_limit=13
 #
 dd() {
   command dd iflag=fullblock status=none "$@"
+}
+shasum() {
+  local alg
+  if type -P shasum > /dev/null; then
+    shasum "$@"
+  else
+    shift
+    alg="$1"
+    shift
+    sha"$alg"sum "$@"
+  fi
 }
 helptext() {
 cat >&2 <<EOF
@@ -707,7 +729,7 @@ outer_tar_prefix() (
   # than requiring double the space for creating the cache.
   set +o pipefail
   tar --format pax -c "$1" 2>/dev/null | {
-    dd bs=512 count=1 > "$TMP_DIR/prefix_header"
+    dd bs=512 count=1 of="$TMP_DIR/prefix_header"
     pax_header_size=0
     if [ "$(getTarTypeflag "$TMP_DIR/prefix_header")" = x ]; then
       pax_header_size="$(ustarSize < "$TMP_DIR/prefix_header")"
