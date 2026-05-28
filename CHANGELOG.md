@@ -1,3 +1,25 @@
+# clache v0.16 - May 28, 2026
+
+Backwards incompatible for caches created with `-H 0` option; migrate to `-H 1`
+before upgrading.
+
+- Bugfixed coredump when using `--sha 1` or `--sha 256` algorithm.  Bug
+  introduced by v0.15.
+- Removed support for xxh32 (`xxhsum -H0`).  It does not particularly stand out
+  in benchmarks and it is not recommended for verifying file integrity due to
+  the amount of collisions.
+- Removed static alpine checks and switched to capability-based checks.  This
+  means some prerequisites known to have compatibility problems get checked on
+  the utility level making them more reliable to determine errors as early as
+  possible.
+- Invalid options now throw an error.  This also means that relative files which
+  start with a hypen are not supported.  I'm okay with this.
+
+Other chores
+
+- Clarified integrity checking archive documentation.
+- Added tests for more reliable pre-release checking.
+
 # clache v0.15 - May 27, 2026
 
 - Support added for alpine Linux with required packages documented.
