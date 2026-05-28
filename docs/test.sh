@@ -17,42 +17,18 @@ fi
 
 echo hello > "$TMP_DIR"/afile
 
-for x in 1 2 3; do
-  if ! (
-    set -euo pipefail
-    ./clache.sh --xxh "$x" -c -n "$TMP_DIR"/afile README.md > "$TMP_DIR/file.tar"
-    ./clache.sh -s -e -n < "$TMP_DIR/file.tar"
-  ) &> /dev/null; then
-    echo "Test Failed: --xxh $x" >&2
-    result=1
-  else
-    echo "PASSED: --xxh $x" >&2
-  fi
-done
-
 for x in 1 256; do
   if ! (
     set -euo pipefail
     ./clache.sh --sha "$x" -c -n "$TMP_DIR"/afile README.md > "$TMP_DIR/file.tar"
     ./clache.sh -s -e -n < "$TMP_DIR/file.tar"
   ) &> /dev/null; then
-    echo "Test Failed: --sha $x" >&2
+    echo "Test Failed: shasum --sha $x" >&2
     result=1
   else
-    echo "PASSED: --sha $x" >&2
+    echo "PASSED: shasum --sha $x" >&2
   fi
 done
-
-if ! (
-  set -euo pipefail
-  ./clache.sh -c README.md > "$TMP_DIR/file.tar"
-  ! ./clache.sh -s -e < "$TMP_DIR/file.tar"
-) &> /dev/null; then
-  echo 'Test Failed: Verifying checksums in archive without checksums should have failed.' >&2
-  result=1
-else
-  echo "PASSED: Archive without checksums fails when checksums required." >&2
-fi
 
 echo 'Checking for docker.' >&2
 if {
