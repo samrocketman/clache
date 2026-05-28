@@ -38,9 +38,17 @@ Supported algorithms (choose one at creation time):
 
 - [xxHash] - `./clache.sh --xxh [0|1|2|3]` extremely fast non-cryptographic hash
   algorithm.
-- [SHA] - `./clache.sh --sha [1|256]` provides cryptographic integrity checking.
-  sha1 available for speed/general availability at the cost of security.
-  sha2-sha256 is recommended for the most secure and correct integrity checking.
+- [SHA] - `./clache.sh --sha [1|256]` is a cryptographic-based hash algorithm.
+  sha1 is generally available at the cost of reliability.
+  sha2-sha256 is
+  recommended for the most reliable integrity checking at the cost of speed.
+
+Algorithm recommendations:
+
+- For the fastest speed, the default, `--xxh 1` (xxh64), is recommended.
+- For higher reliability, with a balance of speed `--xxh 2` (xxh128) is
+  recommended.
+- For most reliability, `--sha 256` is recommended at the cost of speed.
 
 [xxHash]: https://github.com/cyan4973/xxhash
 [SHA]: https://en.wikipedia.org/wiki/Secure_Hash_Algorithms
@@ -54,6 +62,9 @@ sudo apt install xxhash
 
 # Fedora-like
 sudo dnf install xxhash
+
+# Alpine Linux
+apk add --no-cache bash tar coreutils xxhash
 
 # macOS
 brew install xxhash
