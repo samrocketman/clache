@@ -1,0 +1,71 @@
+#!/bin/bash
+
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR:-}"' EXIT
+result=0
+
+if ! (
+  set -euo pipefail
+  shellcheck clache.sh docs/*.sh
+) &> /dev/null; then
+    echo 'Test Failed: shellcheck clache.sh' >&2
+    # fast fail
+    exit 1
+else
+  echo 'PASSED: shellcheck' >&2
+fi
+
+echo hello > "$TMP_DIR"/afile
+
+for x in 1 2 3; do
+  if ! (
+    set -euo pipefail
+    ./clache.sh --xxh "$x" -c -n "$TMP_DIR"/afile README.md > "$TMP_DIR/file.tar"
+    ./clache.sh -s -e -n < "$TMP_DIR/file.tar"
+  ) &> /dev/null; then
+    echo "Test Failed: --xxh $x" >&2
+    result=1
+  else
+    echo "PASSED: --xxh $x" >&2
+  fi
+done
+
+for x in 1 256; do
+  if ! (
+    set -euo pipefail
+    ./clache.sh --sha "$x" -c -n "$TMP_DIR"/afile README.md > "$TMP_DIR/file.tar"
+    ./clache.sh -s -e -n < "$TMP_DIR/file.tar"
+  ) &> /dev/null; then
+    echo "Test Failed: --sha $x" >&2
+    result=1
+  else
+    echo "PASSED: --sha $x" >&2
+  fi
+done
+
+if ! (
+  set -euo pipefail
+  ./clache.sh -c README.md > "$TMP_DIR/file.tar"
+  ! ./clache.sh -s -e < "$TMP_DIR/file.tar"
+) &> /dev/null; then
+  echo 'Test Failed: Verifying checksums in archive without checksums should have failed.' >&2
+  result=1
+else
+  echo "PASSED: Archive without checksums fails when checksums required." >&2
+fi
+
+echo 'Checking for docker.' >&2
+if {
+  type -P docker &&
+  timeout 30 docker run --rm alpine /bin/true
+} &> /dev/null; then
+  echo 'Running docker-based tests.' >&2
+  docker run --rm -v "$PWD:/mnt" -w /mnt alpine ./docs/alpine-tests.sh
+else
+  echo "SKIPPED: docker-based alpine tests due to no docker." >&2
+fi
+
+if [ "${result}" = 0 ]; then
+  echo 'All tests passed.' >&2
+fi
+exit "$result"
