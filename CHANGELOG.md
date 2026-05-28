@@ -1,3 +1,9 @@
+# clache v0.15 - May 27, 2026
+
+- Support added for alpine Linux with required packages documented.
+- If `shasum` is not available, but `sha1sum` and `sha256sum` are available,
+  then `clache.sh` will gracefully fall back.
+
 # clache v0.14 - May 27, 2026
 
 - Fix end of archive checking which was removed in v0.12.
