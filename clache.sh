@@ -67,31 +67,6 @@
 #   Only ustar and pax(ustar) file formats supported.
 #   https://pubs.opengroup.org/onlinepubs/009695399/utilities/pax.html
 
-# Quickly check for prerequisite utilities
-failed_preflight=false
-# xxhsum is an optional dependency which falls back to shasum
-# printf is a shell built-in.
-for x in awk bc cat date dd grep head mkfifo mktemp mv od sed shasum stat tar tee tr wc xxd; do
-  if ! type -P "$x" > /dev/null; then
-    if [ "$x" = shasum ] && (type -P sha256sum && type -P sha1sum; ) > /dev/null; then
-      continue
-    fi
-    echo "Missing dependency '$x'." >&2
-    failed_preflight=true
-  fi
-done
-for x in tr tar; do
-  util_version="$(readlink $(type -P tr))"
-  if [ "${util_version##*/}" = busybox ]; then
-    echo "busybox $x is not supported; apk add tar coreutils"
-    failed_preflight=true
-  fi
-done
-unset util_version
-if [ "$failed_preflight" = true ]; then
-  exit 1
-fi
-
 set -euo pipefail
 export tar_format TAR_HEADER PAX_HEADER PAX_GLOBAL_HEADER TMP_DIR
 TMP_DIR="$(mktemp -d)"
@@ -107,13 +82,43 @@ file_size_digits_limit=13
 #
 # FUNCTIONS (see main at the end)
 #
+preflight_checks() {
+  local failed_preflight
+  # Quickly check for prerequisite utilities
+  failed_preflight=false
+  # xxhsum is an optional dependency which falls back to shasum
+  # printf is a shell built-in.
+  for x in awk bc cat date dd grep head mkfifo mktemp mv od sed shasum stat tar tee tr wc xxd; do
+    if ! type -P "$x" > /dev/null; then
+      if [ "$x" = shasum ] && (type -P sha256sum && type -P sha1sum; ) > /dev/null; then
+        continue
+      fi
+      echo "Missing dependency '$x'." >&2
+      failed_preflight=true
+    fi
+  done
+  # utility compatibility checks
+  if [ ! "$(echo x | tr -dc '[:print:]' | wc -c | xargs)" -eq 1 ]; then
+    echo 'ERROR: tr does not appear to be compiled with character classes i.e. "[:print:]".' >&2
+    echo '       Recommendation: install coreutils.' >&2
+    failed_preflight=true
+  fi
+  if [ ! "$(tar --format pax -cC /dev null 2> /dev/null | getTarTypeflag)" = x ]; then
+    echo 'ERROR: tar does not appear to support "--format pax".' >&2
+    echo '       Recommendation: install GNU tar.' >&2
+    failed_preflight=true
+  fi
+  if [ "$failed_preflight" = true ]; then
+    exit 1
+  fi
+}
 dd() {
   command dd iflag=fullblock status=none "$@"
 }
 shasum() {
   local alg
   if type -P shasum > /dev/null; then
-    shasum "$@"
+    command shasum "$@"
   else
     shift
     alg="$1"
@@ -148,15 +153,16 @@ OPTIONS
     space.  Default: /tmp mktemp directory.
 
   -s, --verify-checksum
+    Enforce checksum verification.
     Protects cache against corruption. Header and archive data checksums are
     calculated and verified.  This option works for creation or extraction.
 
   -a SIZE, --sha SIZE
     Choose the shasum SIZE (1 or 256) to use for archive integrity.
-    Default: 1
+    Default: 1 (only if xxhsum not available)
 
   -H SIZE, --xxh SIZE
-    Choose the xxh SIZE (0, 1, 2, or 3 supported) to use for archive integrity.
+    Choose the xxh SIZE (1, 2, or 3 supported) to use for archive integrity.
     Default: 1
 
   --no-detect
@@ -194,11 +200,17 @@ isBlockZeros() {
   fi
   grep -E '^0+$' <<< "$block" > /dev/null
 }
+dd_optional_stream() {
+  local args=()
+  while [ "$#" -gt 1 ]; do args+=( "$1" ); shift; done
+  if [ -f "${1:-}" ]; then args+=( if="$1" ); else args+=( "$1" ); fi
+  dd "${args[@]}"
+}
 getTarFormat() {
-  dd if="$1" bs=1 count=6 skip=257 | sanitize_nonascii
+  dd_optional_stream bs=1 count=6 skip=257 "$@" | sanitize_nonascii
 }
 getTarTypeflag() {
-  dd if="$1" bs=1 count=1 skip=156 | sanitize_nonascii | tr -d ' '
+  dd_optional_stream bs=1 count=1 skip=156 "$@" | sanitize_nonascii | tr -d ' '
 }
 create_tar_header_chksum() {
   local calculated_checksum
@@ -277,7 +289,7 @@ stream_checksum() {
 algorithm_supported() {
   case "${1:-}" in
     shasum) case "${2:-}" in 1|256) true;; *) false ;; esac ;;
-    xxhsum) case "${2:-}" in 0|1|2|3) true;; *) false ;; esac ;;
+    xxhsum) case "${2:-}" in 1|2|3) true;; *) false ;; esac ;;
     *) false ;;
   esac
 }
@@ -773,6 +785,7 @@ canonical_path() (
 if [ "$#" -lt 1 ]; then
   helptext
 fi
+preflight_checks
 mode="extract"
 full_paths=()
 relative_paths=()
@@ -824,7 +837,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     -H|--xxh)
       if ! algorithm_supported xxhsum "${2:-}"; then
-        echo 'ERROR: Only --xxh 0-3 supported.' >&2
+        echo 'ERROR: Only --xxh 1-3 supported.' >&2
         exit 1
       fi
       sum_util=xxhsum
@@ -851,6 +864,10 @@ while [ "$#" -gt 0 ]; do
     /*)
       full_paths+=( "${1#/}" )
       shift
+      ;;
+    -*)
+      echo 'ERROR: unrecognized option'" '$1'" >&2
+      exit 1
       ;;
     *)
       relative_paths+=( "$1" )
