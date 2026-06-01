@@ -3,6 +3,8 @@
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "${TMP_DIR:-}"' EXIT
 result=0
+# tar tests require real paths and no symlinks within the path
+TMP_DIR="$(cd "$TMP_DIR"; pwd -P)"
 
 if ! (
   set -euo pipefail
