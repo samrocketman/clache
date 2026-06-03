@@ -100,21 +100,27 @@ OPTIONS
     space.  Default: /tmp mktemp directory.
 
   -s, --verify-checksum
+    Enforce checksum verification.
     Protects cache against corruption. Header and archive data checksums are
     calculated and verified.  This option works for creation or extraction.
 
   -a SIZE, --sha SIZE
     Choose the shasum SIZE (1 or 256) to use for archive integrity.
-    Default: 1
+    Default: 1 (only if xxhsum not available)
 
   -H SIZE, --xxh SIZE
-    Choose the xxh SIZE (0, 1, 2, or 3 supported) to use for archive integrity.
+    Choose the xxh SIZE (1, 2, or 3 supported) to use for archive integrity.
     Default: 1
 
   --no-detect
     If an archive was created with --verify-checksum, this disables the
     autodetection which skips the integrity checks for archives that would
     normally verify checksums.
+
+  -bs BUF, --max-bs BUF
+    Increase or lower the max BUF bytes (in MiB) transferred at a time.
+    Environment variable dd_max_bs can be set for values less than 1 MiB.
+    Default: 16 MiB
 
   --help, -h
     Show help.

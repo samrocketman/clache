@@ -1,3 +1,11 @@
+# clache v0.17 - Jun 3, 2026
+
+- Increase default transfer buffer from 5 MiB to 16 MiB after favorable
+  benchmarks.
+- New option `-bs BUF` or `--max-bs BUF` exposes a user-configurable option to
+  customize the transfer buffer in MiB.  Environment variable `dd_max_bs` can be
+  set for values smaller than 1 MiB.
+
 # clache v0.16 - May 28, 2026
 
 Backwards incompatible for caches created with `-H 0` option; migrate to `-H 1`
