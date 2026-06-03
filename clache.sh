@@ -170,6 +170,11 @@ OPTIONS
     autodetection which skips the integrity checks for archives that would
     normally verify checksums.
 
+  -bs BUF, --max-bs BUF
+    Increase or lower the max BUF bytes (in MiB) transferred at a time.
+    Environment variable dd_max_bs can be set for values less than 1 MiB.
+    Default: 16 MiB
+
   --help, -h
     Show help.
 EOF
@@ -551,7 +556,7 @@ dd_max_read() {
   local FILE_SIZE max_bs seek
   # To reasonably maximize throughput dd will read max_bs of data at a time.
   # 5MB read buffer
-  max_bs=5242880
+  max_bs="$dd_max_bs"
   FILE_SIZE="${1:-0}"
   seek="${skip:-0}"
   if [ -z "${trim:-}" ]; then
@@ -796,6 +801,7 @@ xxh_size=1
 sha_size=1
 sum_util=shasum
 disable_integrity_detection=false
+dd_max_bs="${dd_max_bs:-16777216}"
 if type -P xxhsum > /dev/null; then
   sum_util=xxhsum
 fi
@@ -861,6 +867,11 @@ while [ "$#" -gt 0 ]; do
       disable_integrity_detection=true
       shift
       ;;
+    -bs|--max-bs)
+      dd_max_bs="$(bc <<< "${2}*1024*1024")"
+      shift
+      shift
+      ;;
     /*)
       full_paths+=( "${1#/}" )
       shift
@@ -875,6 +886,13 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+if {
+  { ! grep '^[0-9]\+$' <<< "$dd_max_bs" > /dev/null; } ||
+  [ "$dd_max_bs" -lt 1 ]
+}; then
+  echo 'ERROR: --max-bs requires a number 1 or higher.' >&2
+  exit 1
+fi
 if [ "$mode" = extract ]; then
   if [ -w /dev/shm ]; then
     rmdir "$TMP_DIR"
