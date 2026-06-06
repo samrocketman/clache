@@ -36,7 +36,7 @@ Benchmarks for different algorithms are available later in this document.
 
 Supported algorithms (choose one at creation time):
 
-- [xxHash] - `./clache.sh --xxh [0|1|2|3]` extremely fast non-cryptographic hash
+- [xxHash] - `./clache.sh --xxh [1|2|3]` extremely fast non-cryptographic hash
   algorithm.
 - [SHA] - `./clache.sh --sha [1|256]` is a cryptographic-based hash algorithm.
   sha1 is generally available at the cost of reliability.
@@ -78,7 +78,7 @@ when extracting an archive.
 
 - `-a 1` or `--sha 1` creates a SHA1 validated archive.  `--sha 256` is also
   supported.
-- `-H 1` or `--xxh 1` creates an xxHash validated archive.  xxHash `0-3`
+- `-H 1` or `--xxh 1` creates an xxHash validated archive.  xxHash `1-3`
   supported.
 - `-s` or `--verify-checksum`.
 
@@ -265,8 +265,8 @@ The following are PAX records and their values:
   cache data itself.
 - `cl_utl` contains checksum utility used to create archive.  Either `xxhsum` or
   `shasum`.
-- `cl_agl` value is one of: 0, 1, 2, 3, or 256.  Depending on `cl_utl` means
-  either `--xxh [0|1|2|3]` or `--sha [1|256]`.
+- `cl_agl` value is one of: 1, 2, 3, or 256.  Depending on `cl_utl` means either
+  `--xxh [1|2|3]` or `--sha [1|256]`.
 
 The following is a sample of a PAX record data body.
 
