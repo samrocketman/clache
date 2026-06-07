@@ -5,7 +5,7 @@ if [ ! -f ~/10gb ]; then
   # write 10gb file
   (
     set -x
-    dd if=/dev/zero of=~/10gb bs=5M count=2048 iflag=fullblock oflag=dsync status=progress
+    dd if=/dev/zero of=~/10gb bs=16M count=640 iflag=fullblock oflag=dsync status=progress
   )
 fi
 case "${1:-}" in
